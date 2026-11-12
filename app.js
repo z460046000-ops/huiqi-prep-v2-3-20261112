@@ -160,7 +160,9 @@
       if (active) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
     });
     const projectRoute = ['task','profile','policy','diagnosis','assembly','guidance','version','compare','source'].includes(route) || route==='expert' && Boolean(params.task && S.getTask(params.task));
-    document.querySelector('#recent-projects').innerHTML = state.tasks.map(task => `<div class="recent-project-row"><button class="recent-project${projectRoute && state.activeTaskId === task.id ? ' is-active' : ''}" data-route="task" data-task="${escape(task.id)}"${projectRoute && state.activeTaskId === task.id ? ' aria-current="page"' : ''} title="${escape(task.title)}">${escape(task.title)}</button><button type="button" class="icon-button project-delete" data-action="delete-project" data-task="${escape(task.id)}" aria-label="删除项目：${escape(task.title)}" title="删除项目">${icon('trash')}</button></div>`).join('');
+    const defaultIds = new Set(['task-innovation', 'task-digital', 'task-review']);
+    const recentTasks = state.tasks.filter(task => !defaultIds.has(task.id) && !(task.request === '查找适用政策并准备申报材料' && task.company?.name === '跳舞吧信息技术有限公司' && task.title === '跳舞吧信息技术有限公司 · 政策申报'));
+    document.querySelector('#recent-projects').innerHTML = recentTasks.map(task => `<div class="recent-project-row"><button class="recent-project${projectRoute && state.activeTaskId === task.id ? ' is-active' : ''}" data-route="task" data-task="${escape(task.id)}"${projectRoute && state.activeTaskId === task.id ? ' aria-current="page"' : ''} title="${escape(task.title)}">${escape(task.title)}</button><button type="button" class="icon-button project-delete" data-action="delete-project" data-task="${escape(task.id)}" aria-label="删除项目：${escape(task.title)}" title="删除项目">${icon('trash')}</button></div>`).join('');
     document.querySelector('#storage-status').textContent = state.storageError || state.loadWarning || '';
   }
   function renderSource(taskId, sourceId) {
@@ -233,7 +235,7 @@
     sidebar();
     B.syncSelection();
     window.PolicyHomeFeed?.mount();
-    document.title = '惠企政策智能体V2.3';
+    document.title = '企政策智能体V2.3';
     window.PolicyChat.restoreView();
     restoreFormDraft();
     const documentContent=page.querySelector('.workspace-content');
