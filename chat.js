@@ -114,7 +114,7 @@
     if (workId === 'interpret' || workId === 'match' && task.interpretPolicyId) {
       const picked = window.PolicyData.policies.find(item => item.id === (task.interpretPolicyId || (workId === 'interpret' && task.steps.match ? task.policyId : '')));
       if (!picked) return '先选一项政策，我就能按它回答。';
-      if (/通过率|成功率|概率|几率|能过|获批/.test(message)) return window.PolicyMatch.scoreText(task, window.PolicyPublicPolicies?.find(item => item.id === picked.id));
+      if (/匹配度|匹配得|通过率|成功率|概率|几率|能过|获批/.test(message)) return window.PolicyMatch.scoreText(task, window.PolicyPublicPolicies?.find(item => item.id === picked.id));
       if (/材料|资料|准备|证明/.test(message)) return `${picked.title}\n所需材料：${picked.materials.join('、')}\n材料要和企业实际情况逐项对应。`;
       if (/时间|截止|什么时候|期限|还来得及/.test(message)) return `${picked.title}\n申报时间：${picked.deadline}\n具体批次以原文为准。`;
       if (/符合|能不能|能否|满足|够格/.test(message)) return `${picked.title}\n申报条件：\n${picked.conditions.map((condition,index)=>`${index+1}. ${condition}`).join('\n')}\n我只能帮你对照已有信息，能否申报要看原文和证明材料。`;
@@ -128,7 +128,7 @@
       if (!hasPolicy(task)) return `还没选定要办理的政策。先选一项，我按这项政策给材料清单、办理渠道和截止时间。\n选好之前，可以先了解通用流程：\n1. 确认政策原文、申报批次与截止时间。\n2. 按清单整理正文及附件，核对签字、盖章和文件格式。\n3. 由企业负责人确认准备提交的版本。\n4. 按政策指定的官方渠道办理并保存回执。\n本平台不会代为提交政府申报。`;
       return `办理前先核对四件事：\n1. 确认政策原文、申报批次与截止时间。\n2. 按清单整理正文及附件，核对签字、盖章和文件格式。\n3. 由企业负责人确认准备提交的版本。\n4. 按政策指定的官方渠道办理并保存回执。\n${latest ? `本项目最新材料为 V${latest.number}，${latest.status==='confirmed'?'已由你确认':'仍待核对'}。` : '本项目尚未保存材料版本，可以先准备资料。'}本平台不会代为提交政府申报。`;
     }
-    if (/成功|概率|几率|获批/.test(message)) return '本产品不估算获批概率。可以到“政策解读与匹配”看匹配度和材料准备度，并逐项核对差距。';
+    if (/成功|概率|几率|获批/.test(message)) return '本产品不估算获批概率。可以到“政策解读与匹配”看匹配度，并逐项核对条件差距。';
     if (/已经(?:查|匹配|保存|补)|帮我(?:查|匹配|保存|补|生成|组稿)|开始(?:查|匹配|组稿)|直接(?:查|保存|生成)/.test(message)) {
       return '可以，点下方的按钮继续。' + '';
     }
@@ -202,6 +202,10 @@
     const E = U().escape, I = U().icon;
     return `<div class="upload-row"><label class="upload-main"><span class="upload-icon" aria-hidden="true">${I('upload')}</span><span class="upload-text"><b>${E(title)}</b><small>${E(hint)}</small></span><input type="file" ${inputAttrs}></label>${generate ? `<span class="upload-alt"><span>只有零散资料？</span>${generate}</span>` : ''}</div>`;
   }
+  function adviceMarkup(task,source,attrs){
+    const E=U().escape,I=U().icon;
+    return `<div class="prep-advice"><div class="prep-advice-head"><span class="prep-advice-mark" aria-hidden="true">${I('spark')}</span><b>AI 建议</b><button type="button" class="text-button prep-advice-view" data-action="material-review" ${attrs}>查看 ${I('chevron')}</button></div><p>${E(window.PolicyMatch?.materialAdvice(task,source)||'')}</p></div>`;
+  }
   function materialCard(task,item,compact=false,label=''){
     const E=U().escape,I=U().icon;
     // 照片、视频（库表 media: true）只能上传，不提供 AI 生成。
@@ -223,7 +227,7 @@
       if(count)body=`<div class="prep-busy" role="status"><span class="prep-spinner" aria-hidden="true"></span><div><strong>AI 正在生成《${E(item.label)}》</strong><small>正在从 ${count} 份资料里提取内容</small></div></div>`;
       else if(ready){
         const fileName=source.fileName||`${item.label}.doc`;
-        body=`<div class="prep-file"><span class="prep-file-icon" aria-hidden="true">${I('file')}</span><div class="prep-file-text"><strong title="${E(fileName)}">${E(fileName)}</strong></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div><div class="prep-advice"><div class="prep-advice-head"><span class="prep-advice-mark" aria-hidden="true">${I('spark')}</span><b>AI 建议</b><button type="button" class="text-button prep-advice-view" data-action="material-review" ${attrs}>查看 ${I('chevron')}</button></div><p>${E(window.PolicyMatch?.materialAdvice(task,source)||'')}</p></div>`;
+        body=`<div class="prep-file"><span class="prep-file-icon" aria-hidden="true">${I('file')}</span><div class="prep-file-text"><strong title="${E(fileName)}">${E(fileName)}</strong></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div>${adviceMarkup(task,source,attrs)}`;
       }else body=uploadRow({ inputAttrs: `data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"`, title: '上传文件', hint: media ? '图片、视频' : 'Word、PDF、图片', generate: uploadOnly ? '' : generate('AI 生成') });
       return `<article class="prep-card${ready?' is-ready':''}${compact&&!ready&&!count?' is-compact':''}" data-status="${E(item.status)}">${head}${note?`<p class="prep-card-note">${E(note)}</p>`:''}${body}</article>`;
   }
@@ -455,7 +459,7 @@
     event.preventDefault();
     event.target.form?.requestSubmit();
   });
-  window.PolicyChat = Object.freeze({ uploadRow, materialCard, prepSections, render, captureView, restoreView, answerFor: answer,
+  window.PolicyChat = Object.freeze({ uploadRow, adviceMarkup, materialCard, prepSections, render, captureView, restoreView, answerFor: answer,
     forgetTask(taskId) {
       for (const map of [drafts]) {
         for (const key of map.keys()) if(key.startsWith(`${taskId}:`)) map.delete(key);

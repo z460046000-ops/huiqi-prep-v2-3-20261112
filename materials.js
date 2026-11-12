@@ -258,7 +258,8 @@
     if (empty) return `<section class="vd-card is-empty mat-readonly-section">${head}</section>`;
     const open = expandedBodies.has(`${version.id}:${index}`);
     const quotes = sectionQuotes(section);
-    return `<section class="vd-card mat-readonly-section${pending ? ' is-pending' : ''}">${head}${pending ? '<p class="vd-flag">这份材料还有待补充的内容，可以改好后重新上传，不影响确认。</p>' : ''}<div class="mat-body-clamp${open ? ' is-open' : ''}" data-clamp-key="${E(version.id)}:${index}"><div class="mat-body-text">${E(section.body || '本章尚未填写。')}</div><button type="button" class="text-button mat-body-toggle" data-action="mat-body-toggle" aria-expanded="${open}" hidden>${open ? '收起' : '展开全部'}</button></div>${quotes.length ? `<div class="vd-quotes"><span>引用资料</span>${sourceDetails(quotes)}</div>` : ''}</section>`;
+    const advice=source&&source.provided?window.PolicyChat.adviceMarkup(task,source,`data-task="${E(task.id)}" data-source="${E(sourceId)}"`):'';
+    return `<section class="vd-card mat-readonly-section${pending ? ' is-pending' : ''}">${head}${advice}${pending ? '<p class="vd-flag">这份材料还有待补充的内容，可以改好后重新上传，不影响确认。</p>' : ''}<div class="mat-body-clamp${open ? ' is-open' : ''}" data-clamp-key="${E(version.id)}:${index}"><div class="mat-body-text">${E(section.body || '本章尚未填写。')}</div><button type="button" class="text-button mat-body-toggle" data-action="mat-body-toggle" aria-expanded="${open}" hidden>${open ? '收起' : '展开全部'}</button></div>${quotes.length ? `<div class="vd-quotes"><span>引用资料</span>${sourceDetails(quotes)}</div>` : ''}</section>`;
   }
 
   function renderVersion(versionId) {

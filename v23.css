@@ -236,6 +236,13 @@
 .upload-text small{font-size:11px;color:#8a97a8}
 .upload-alt{display:flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}
 .upload-alt .prep-alt-link{position:relative;display:inline-flex;align-items:center;gap:4px;font-size:12px}
+/* 提交前复查匹配度 */
+.check-score{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:10px 12px;border-radius:10px;background:#f6f8fc;font-size:13px}
+.check-score-label{color:#62748b;white-space:nowrap}
+.check-score-level{font-size:16px;font-weight:700;color:#1f5fd6}
+.check-score-level.is-低{color:#c2410c}
+.check-score-note{color:#445267;white-space:nowrap}
+.check-score button{margin-left:auto;white-space:nowrap}
 @media(max-width:639px){.upload-row{flex-wrap:wrap}.upload-main{flex-basis:100%}.upload-alt{width:100%}}
 
 .prep-card.is-compact>.upload-row{grid-column:1 / -1}
