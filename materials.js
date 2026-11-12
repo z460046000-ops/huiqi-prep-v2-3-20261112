@@ -191,7 +191,10 @@
   function renderLibrary(requested = '') {
     const companies = libraryCompanies();
     const head = pageHeader('', '申报材料库');
-    if (!companies.length) return `<div class="mat-page">${head}<div class="mat-empty"><h2>材料库里还没有材料</h2><p>保存第一份材料后，会出现在这里。</p></div></div>`;
+    // 企业还没有确认过材料版本：引导去整理申报材料（PRD 6.3 第 23 条）。
+    const guide = '<a class="button button-primary" href="#dashboard?work=assembly">去整理申报材料</a>';
+    if (!companies.length) return `<div class="mat-page">${head}<div class="mat-empty"><h2>材料库里还没有材料</h2><p>在“整理申报材料”里选好政策、整理并确认材料后，版本会保存在这里。</p>${guide}</div></div>`;
+    if (requested && !companies.some(([name]) => name === requested)) return `<div class="mat-page">${head}<div class="mat-empty"><h2>「${E(requested)}」还没有材料版本</h2><p>在“整理申报材料”里选好政策、整理并确认材料后，版本会保存在这里。</p>${guide}</div></div>`;
     const [current, policies] = companies.find(([name]) => name === requested) || companies[0];
     const tabs = companies.map(([name]) => `<button type="button" class="mat-company-tab${name === current ? ' is-active' : ''}" data-action="mat-library-tab" data-company="${E(name)}"${name === current ? ' aria-current="page"' : ''}>${E(name)}</button>`).join('');
     const groups = [...policies.values()].map(({ policyId, items }) => {

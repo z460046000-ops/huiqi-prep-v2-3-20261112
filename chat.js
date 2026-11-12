@@ -128,7 +128,12 @@
   /* 材料卡：申报材料和办理指引的核对卡共用。上传完整文件，或批量传零散资料由 AI 生成；有文件后可重新上传、删除。 */
   function materialCard(task,item,compact=false){
     const E=U().escape,I=U().icon;
-    const accept='.doc,.docx,.txt,.md,.htm,.html,.pdf,.jpg,.jpeg,.png';
+    // 照片、视频（库表 media: true）只能上传，不提供 AI 生成。
+    const policy=(window.PolicyPublicPolicies||[]).find(entry=>(item.sourceId||'').startsWith(`${entry.id}-`));
+    const spec=policy?.application?.checklist.find(entry=>`${policy.id}-${entry.id}`===item.sourceId);
+    // 证照、审计报告、盖章协议这类材料（uploadOnly）也只能上传。
+    const media=Boolean(spec?.media), uploadOnly=media||Boolean(spec?.uploadOnly);
+    const accept=media?'.jpg,.jpeg,.png,.mp4,.mov':'.doc,.docx,.txt,.md,.htm,.html,.pdf,.jpg,.jpeg,.png';
       const attrs=`data-task="${E(task.id)}" data-source="${E(item.sourceId||'')}"`;
       const source=task.sources.find(entry=>entry.id===item.sourceId);
       const count=window.PolicyMaterials?.generatingCount(task.id,item.sourceId)||0;
@@ -143,8 +148,8 @@
       else if(ready){
         const fileName=source.fileName||`${item.label}.doc`;
         body=`<div class="prep-file"><span class="prep-file-icon" aria-hidden="true">${I('file')}</span><div class="prep-file-text"><strong title="${E(fileName)}">${E(fileName)}</strong></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div><div class="prep-advice"><div class="prep-advice-head"><span class="prep-advice-mark" aria-hidden="true">${I('spark')}</span><b>AI 建议</b><button type="button" class="text-button prep-advice-view" data-action="material-review" ${attrs}>查看 ${I('chevron')}</button></div><p>${E(window.PolicyMatch?.materialAdvice(task,source)||'')}</p></div>`;
-      }else if(compact)body=`<div class="prep-compact-actions"><label class="prep-compact-upload">上传文件<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"></label>${generate('AI 生成')}</div>`;
-      else body=`<label class="prep-drop"><span class="prep-drop-icon" aria-hidden="true">${I('upload')}</span><span class="prep-drop-title"><b>上传完整文件</b><small>Word、PDF、图片</small></span><input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"></label><div class="prep-alt"><span>只有零散资料？</span>${generate('批量上传，AI 生成')}${I('chevron')}</div>`;
+      }else if(compact)body=`<div class="prep-compact-actions"><label class="prep-compact-upload">上传文件<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"></label>${uploadOnly?'':generate('AI 生成')}</div>`;
+      else body=`<label class="prep-drop"><span class="prep-drop-icon" aria-hidden="true">${I('upload')}</span><span class="prep-drop-title"><b>上传完整文件</b><small>${media?'图片、视频':'Word、PDF、图片'}</small></span><input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"></label>${uploadOnly?'':`<div class="prep-alt"><span>只有零散资料？</span>${generate('批量上传，AI 生成')}${I('chevron')}</div>`}`;
       return `<article class="prep-card${ready?' is-ready':''}${compact&&!ready&&!count?' is-compact':''}" data-status="${E(item.status)}">${head}${note?`<p class="prep-card-note">${E(note)}</p>`:''}${body}</article>`;
   }
   /* 政策申报辅助：每份材料一张卡。两条路得到同一份文件：上传完整文件，或批量传零散资料由 AI 生成。 */

@@ -38,6 +38,8 @@
   const pad = value => String(value).padStart(2, '0');
   const today = () => { const now = new Date(); return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`; };
   const shortDate = value => `${Number(value.slice(5, 7))}月${Number(value.slice(8, 10))}日`;
+  // 常态办理的事项（如软件产品增值税即征即退）没有申报窗口，按“政策方向”归类，不计入正在申报，但文案不说“暂未开放”。
+  const ongoing = policy => policy?.category === '常态办理';
   const statusOf = policy => (!policy.applicationEnd ? 'notice' : policy.applicationEnd < today() ? 'closed' : 'open');
   const daysLeft = policy => Math.round((Date.parse(policy.applicationEnd) - Date.parse(today())) / 86400000);
 
@@ -46,7 +48,7 @@
   const confTag = level => level === 'mid' ? '<em class="conf-tag is-mid">以原文为准</em>' : level === 'low' ? '<em class="conf-tag is-low">待确认</em>' : '';
   function windowText(policy) {
     const status = statusOf(policy);
-    if (status === 'notice') return '暂无统一申报窗口';
+    if (status === 'notice') return ongoing(policy) ? '按纳税期常态办理' : '暂无统一申报窗口';
     if (status === 'closed') return `已于${shortDate(policy.applicationEnd)}截止`;
     if (policy.applicationStart > today()) return `${shortDate(policy.applicationStart)}开始申报`;
     const left = daysLeft(policy);
@@ -59,7 +61,8 @@
     const rdLow = rd === '2%以下' || rd === '2%-3%';
     // 准入只有地区（PRD V2.2 8.1.4）：企业所在省、市或全国；地区待补充时只取全国政策。行业不筛选，作为计分条件。
     const hasRegion = Boolean(region) && region !== '其他地区';
-    const inRegion = policy => policy.region === '全国' || (hasRegion && (policy.region === region || policy.region === regionParent[region]));
+    // 放宽到省时 region 是省名：再带上同省其他城市的政策，结果卡上提示申报前核对地区要求（PRD 6.3 第 6 条）。
+    const inRegion = policy => policy.region === '全国' || (hasRegion && (policy.region === region || policy.region === regionParent[region] || regionParent[policy.region] === region));
     const reasonsFor = policy => {
       const rules = [
         region && policy.region === region && [3, `面向${region}，和你选的地区一致`],
@@ -223,9 +226,10 @@
     const policy = publicPolicies().find(item => item.id === task.policyId);
     if (!policy) return '';
     const app = policy.application;
-    const source = `<a href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">《${esc(policy.title)}》</a>`;
+    const source = `<a href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(/^《/.test(policy.title) ? policy.title : `《${policy.title}》`)}</a>`;
     const downloads = (app?.templates || []).filter(item => /\.(zip|docx?|pdf)(?:[?#]|$)/i.test(item.url));
-    const missing = app?.templateStatus === 'missing' ? `<p class="template-missing">这项政策有申报模板，但暂未收录。可以从${source}的附件下载后上传，上传后照常整理材料。</p>` : '';
+    // 模板不在原文附件里时（比如要在官方系统里下载），按库表里的说明提示去哪里取。
+    const missing = app?.templateStatus === 'missing' ? `<p class="template-missing">这项政策有申报模板，但暂未收录。${app.templateWhere ? esc(app.templateWhere) : `可以从${source}的附件下载`}后上传，上传后照常整理材料。</p>` : '';
     return `<div class="chat-gap-templates">${missing}<p>${app ? `根据${source}，需要准备以下资料：` : `${source}未列出具体材料清单，以下为常用资料，待按原文核对。`}</p>${downloads.map(item => `<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.label)}</a>`).join('')}</div>`;
   }
 
@@ -250,7 +254,8 @@
     const latest = latestVersion(task);
     const submit = open?.application?.submit;
     const deadline = submit?.deadline || (open ? windowText(open) : policy.deadline);
-    const dueText = confOf(open, 'applicationEnd') === 'low' ? '截止时间待确认' : `${deadline}截止`;
+    // 常态办理的事项没有统一截止日期（如“按纳税期办理”），不再拼“截止”。
+    const dueText = confOf(open, 'applicationEnd') === 'low' ? '截止时间待确认' : /\d/.test(deadline) ? `${deadline}截止` : deadline;
     const scored = open ? policyScore(task, open) : null;
     if (hasNoTemplate(open)) {
       const items = open.application.checklist.filter(item => item.kind !== 'condition');
@@ -261,7 +266,7 @@
       // V2.3：从“核对并提交”进来的任务，材料核对结果在上面的核对卡里，这一步直接引用它。
       task.entry === 'guidance' && !latest ? (() => { const rows = materialCheck(task, open || policy).filter(row => row.required); const ok = rows.filter(row => row.state !== 'lack').length; const warn = rows.filter(row => row.state === 'warn').length; return { title: '核对申报材料', detail: `已齐 ${ok}/${rows.length} 项${warn ? `，${warn} 项有问题` : ''}`, attrs: 'data-action="guidance-prep"', work: 'guidance', state: ok === rows.length && !warn ? '已核对' : '待补齐' }; })() :
       { title: '检查申报材料', detail: !latest ? '还没有申报材料' : scored ? `V${latest.number}，材料准备度 ${scored.ready}/${scored.total}` : `V${latest.number}，点开查看全部内容`, attrs: latest ? `data-route="version" data-id="${esc(latest.id)}"` : 'data-action="guidance-prep"', work: latest ? 'guidance' : 'assembly', state: !latest ? '待整理' : latest.status === 'confirmed' ? '已确认' : '待确认', done: latest?.status === 'confirmed' },
-      { title: '到官方系统提交', detail: submit ? `${submit.name}，${dueText}` : '按政策指定的官方渠道办理', attrs: 'data-route="guidance"', state: '' },
+      { title: submit?.email ? '发邮件报送' : '到官方系统提交', detail: submit ? `${submit.name}，${dueText}` : '按政策指定的官方渠道办理', attrs: 'data-route="guidance"', state: '' },
     ];
     const card = `<ol class="guidance-list">${rows.map((row, index) => `<li><button type="button" class="guidance-step" ${row.attrs} data-task="${esc(task.id)}" data-work="${row.work || 'guidance'}"><span class="guidance-step-number">${index + 1}</span><span class="guidance-step-copy"><strong>${esc(row.title)}</strong><small>${esc(row.detail)}</small></span>${row.state ? `<span class="guidance-step-state${row.done ? ' is-done' : ''}">${esc(row.state)}</span>` : ''}${icon('arrow')}</button></li>`).join('')}</ol>`;
     return assistantBubble(`接下来这样办，点开每一步看详情。`, card, 'guidance');
@@ -306,7 +311,7 @@
     const last = jumpEvents().filter(item => item.taskId === taskId && item.policyId === policyId).at(-1);
     if (!last) return '';
     const date = new Date(last.at);
-    return `<p class="guidance-jump-log">已于 ${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())} 前往官方系统</p>`;
+    return `<p class="guidance-jump-log">已于 ${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())} ${/^mailto:/.test(last.url || '') ? '打开邮件准备报送' : '前往官方系统'}</p>`;
   }
   function goOfficial(link) {
     if (!link.hasAttribute('data-official-jump')) { window.open(link.href, '_blank', 'noopener'); return; }
@@ -345,15 +350,17 @@
     const policy = task.steps.match ? publicPolicies().find(item => item.id === task.policyId) : null;
     if (!policy) return '';
     const submit = policy.application?.submit;
+    // 邮件报送的政策（submit.email）：按发邮件的说法写，复制的是邮箱地址。
+    const mail = Boolean(submit?.email);
     const lowDate = confOf(policy, 'applicationEnd') === 'low', lowUrl = confOf(policy, 'submitUrl') === 'low';
     const left = statusOf(policy) === 'open' && !lowDate ? daysLeft(policy) : null;
     const facts = [['截止时间', lowDate ? '待确认，以原文为准' : submit?.deadline || windowText(policy)], ...(left !== null ? [['还剩', `${left} 天`]] : []), ...(submit?.contact ? [['咨询', submit.contact]] : [])];
     const steps = [
-      lowUrl ? { title: '确认办理渠道', detail: '办理入口还没核实，请先看政策原文写明的渠道', action: `<a class="button button-secondary" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看原文中的办理渠道 ${icon('arrow')}</a>` } : { title: '打开官方系统', detail: submit ? submit.name : '按原文写明的渠道办理', action: `<a class="button button-primary" href="${esc(submit?.url || policy.sourceUrl)}" target="_blank" rel="noopener noreferrer" data-official-jump data-task="${esc(task.id)}" data-policy="${esc(policy.id)}" data-name="${esc(submit?.name || policy.agency)}">${submit ? '打开系统' : '查看原文'} ${icon('arrow')}</a>` },
+      lowUrl ? { title: '确认办理渠道', detail: '办理入口还没核实，请先看政策原文写明的渠道', action: `<a class="button button-secondary" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看原文中的办理渠道 ${icon('arrow')}</a>` } : { title: mail ? '发邮件报送' : '打开官方系统', detail: submit ? (mail ? `${submit.name}：${submit.email}` : submit.name) : '按原文写明的渠道办理', action: `<a class="button button-primary" href="${esc(submit?.url || policy.sourceUrl)}" target="_blank" rel="noopener noreferrer" data-official-jump data-task="${esc(task.id)}" data-policy="${esc(policy.id)}" data-name="${esc(submit?.name || policy.agency)}">${mail ? '写邮件' : submit ? '打开系统' : '查看原文'} ${icon('arrow')}</a>` },
       ...(submit ? submit.steps : []).map(step => ({ title: step })),
-      { title: '保存回执', detail: '提交后保存系统的回执，以便后续查询。' },
+      mail ? { title: '保存发送记录', detail: '发送后保留已发送的邮件和附件，以便后续查询。' } : { title: '保存回执', detail: '提交后保存系统的回执，以便后续查询。' },
     ];
-    return `<div class="guidance-detail"><h2 class="sr-only">到官方系统提交</h2><section class="drawer-summary guidance-summary"><p>${esc(policy.title)}</p><dl>${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></section>${hasNoTemplate(policy) ? `<section class="guidance-materials"><h3>材料清单</h3><p>这项政策没有申报模板，不生成初稿，按清单准备。</p><ul>${policy.application.checklist.filter(item => item.kind !== 'condition').map(item => `<li><strong>${esc(item.label)}${confTag(item.confidence)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ''}</li>`).join('')}</ul></section>` : ''}<ol class="guidance-timeline">${steps.map(step => `<li${step.detail ? '' : ' class="is-plain"'}><div><strong>${esc(step.title)}</strong>${step.detail ? `<small>${esc(step.detail)}</small>` : ''}</div>${step.action || ''}</li>`).join('')}</ol>${jumpLog(task.id, policy.id)}<p class="guidance-note">登录和提交要你本人在官方系统完成。</p>${applicationGuidance(policy) ? `<div class="guidance-policy-note">${applicationGuidance(policy)}</div>` : ''}<div class="guidance-fallback"><span>官方系统打不开？</span><button type="button" class="text-button" data-action="copy-official" data-url="${esc(submit?.url || policy.sourceUrl)}">复制官方链接</button><button type="button" class="text-button" data-action="guidance-service">联系人工客服</button></div></div>` + (jumpEvents().some(item => item.taskId === task.id && item.policyId === policy.id) ? '' : serviceRec('handling'));
+    return `<div class="guidance-detail"><h2 class="sr-only">${mail ? '发邮件报送' : '到官方系统提交'}</h2><section class="drawer-summary guidance-summary"><p>${esc(policy.title)}</p><dl>${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></section>${hasNoTemplate(policy) ? `<section class="guidance-materials"><h3>材料清单</h3><p>这项政策没有申报模板，不生成初稿，按清单准备。</p><ul>${policy.application.checklist.filter(item => item.kind !== 'condition').map(item => `<li><strong>${esc(item.label)}${confTag(item.confidence)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ''}</li>`).join('')}</ul></section>` : ''}<ol class="guidance-timeline">${steps.map(step => `<li${step.detail ? '' : ' class="is-plain"'}><div><strong>${esc(step.title)}</strong>${step.detail ? `<small>${esc(step.detail)}</small>` : ''}</div>${step.action || ''}</li>`).join('')}</ol>${jumpLog(task.id, policy.id)}<p class="guidance-note">${mail ? '邮件要你本人从单位邮箱发送。' : '登录和提交要你本人在官方系统完成。'}</p>${applicationGuidance(policy) ? `<div class="guidance-policy-note">${applicationGuidance(policy)}</div>` : ''}<div class="guidance-fallback"><span>${mail ? '邮件程序打不开？' : '官方系统打不开？'}</span><button type="button" class="text-button" data-action="copy-official" data-url="${esc(mail ? submit.email : submit?.url || policy.sourceUrl)}">${mail ? '复制邮箱地址' : '复制官方链接'}</button><button type="button" class="text-button" data-action="guidance-service">联系人工客服</button></div></div>` + (jumpEvents().some(item => item.taskId === task.id && item.policyId === policy.id) ? '' : serviceRec('handling'));
   }
 
   /* 公开政策的详情：和政策列表用同一张结构化卡片。 */
@@ -453,7 +460,7 @@
   function scoreText(task, policy) {
     const result = policy && policyScore(task, policy);
     if (!result) return '告诉我企业名称和情况，我才能判断匹配度。';
-    return `本产品不估算获批概率。按现在的信息，「${policy.title}」的匹配度是${result.level}${result.pending ? `，还有 ${result.pending} 项待补充，补充后更准` : ''}；材料准备度 ${result.ready}/${result.total}。${{ open: '', notice: '这项政策暂未开放申报，开放后再来申报。', closed: '这项政策已截止，本期无法申报。' }[statusOf(policy)]}最终以主管部门审核为准。`;
+    return `本产品不估算获批概率。按现在的信息，「${policy.title}」的匹配度是${result.level}${result.pending ? `，还有 ${result.pending} 项待补充，补充后更准` : ''}；材料准备度 ${result.ready}/${result.total}。${(ongoing(policy) ? { notice: '这项政策按纳税期常态办理，不是集中申报。' } : { open: '', notice: '这项政策暂未开放申报，开放后再来申报。', closed: '这项政策已截止，本期无法申报。' })[statusOf(policy)] || ''}最终以主管部门审核为准。`;
   }
 
   function scorePanel(task, policy) {
@@ -472,45 +479,47 @@
     return assistantBubble('想了解哪项政策？选一项，我来讲清楚。', `<div class="intake-card match-result${onlyOpen ? ' only-open' : ''}"><div class="match-result-bar">${onlyOpenToggle()}</div>${guide}<div class="match-policy-grid">${cards}</div></div>`, 'match');
   }
 
-  /* 模拟数据：等接入政策结构化数据和企业数据库后替换。门槛按政策的支持方向给，不是政策原文；企业数量按名称算，同一企业每次一样。 */
-  const mockThresholds = {
-    研发支持: [{ key: 'patents', label: '专利', need: 3, unit: '个' }, { key: 'rd', label: '研发费占比', need: 3, unit: '%', interval: true }],
-    资质培育: [{ key: 'patents', label: '专利', need: 1, unit: '个' }, { key: 'copyrights', label: '软件著作权', need: 2, unit: '个' }],
-    数字化改造: [{ key: 'copyrights', label: '软件著作权', need: 1, unit: '个' }, { key: 'rd', label: '研发费占比', need: 2, unit: '%', interval: true }, { key: 'revenue', label: '营业收入', need: 1000, unit: '万', interval: true }],
-    金融支持: [{ key: 'patents', label: '专利', need: 1, unit: '个' }],
+  /* 数值门槛只用政策原文写明的（public-policy-data.js 里的 metrics），原文没写就不判断。 */
+  const policyRules = policy => policy?.metrics || [];
+  /* 企业接口：原型还没接集团企业地图接口，这里只收录核对过公开来源的真实企业（来源见 public-policy-sources.md）。
+     不在名单里的企业按“查不到工商信息”处理；没核实到的字段留空，画像里显示“待补充 / 待核实”。 */
+  const REAL_COMPANIES = {
+    北京久其金建科技有限公司: { region: '北京市', industry: '软件信息', founded: '2017-04-13' },
+    北京华夏电通科技股份有限公司: { region: '北京市', industry: '软件信息', founded: '2001-09-14' },
+    北京久其政务软件股份有限公司: { region: '北京市', industry: '软件信息', founded: '2006-01-12' },
+    上海久其软件有限公司: { region: '上海市', industry: '软件信息' },
+    成都久其软件有限公司: { region: '成都市', industry: '软件信息' },
+    广东久其软件有限公司: { region: '广州市', industry: '软件信息' },
   };
-  /* 查不到工商信息的企业：演示时用这个名字触发。接口字段全部留空，只用用户填写的内容。 */
-  const NOT_FOUND_NAMES = ['张政奥'];
-  /* 合规风险示例：这个名字的企业带一条经营异常，用来演示诊断卡和信用修复推荐。 */
-  const RISK_NAMES = { '示例风险科技有限公司': [['经营异常', '1 条，列入原因：通过登记的住所无法联系']] };
-  const companyRisks = task => RISK_NAMES[(task?.company?.name || '').trim()] || [];
+  /* 工商状态为注销、吊销：按“查不到企业”处理（PRD 6.3 第 2 条）。华宇信码 2026-06-29 完成注销登记。 */
+  const REVOKED_NAMES = { 北京华宇信码技术有限公司: '注销' };
+  const sim = key => Boolean(window.PolicySim?.on(key));
+  const companyKey = task => (task?.company?.name || '').trim();
+  // 企业接口失败或超时（模拟开关）：不提示核对名称，提示稍后重试。
+  const companyApiFailed = task => Boolean(companyKey(task)) && sim('apiTimeout');
+  const companyNotFound = task => { const name = companyKey(task); return Boolean(name) && (companyApiFailed(task) || !REAL_COMPANIES[name] || Boolean(REVOKED_NAMES[name])); };
+  const companyRevoked = task => REVOKED_NAMES[companyKey(task)] || '';
+  /* 经营风险：没有找到可公开核验的真实记录，只能用模拟开关演示，记录上写明是模拟的。 */
+  const companyRisks = task => sim('risk') && !companyNotFound(task) ? [['经营异常（模拟）', '1 条，列入原因：通过登记的住所无法联系。这条记录由模拟开关生成，不是该企业的真实记录']] : [];
   function diagnosisCard(task) {
     if (companyNotFound(task)) return '';
     // 只在查到风险时出现；没有风险的企业不打扰。
     const risks = companyRisks(task);
     if (!risks.length) return '';
     const riskRows = risks.map(([label, detail]) => `<li class="is-risk"><b>${esc(label)}</b>${esc(detail)}</li>`).join('');
-    return `<section class="diag-card" aria-labelledby="diag-title"><header><h3 id="diag-title">发现 ${risks.length} 项经营风险，可能影响申报</h3><small>来源：工商公开信息</small></header><ul>${riskRows}</ul>${serviceRec('risk')}</section>`;
+    return `<section class="diag-card" aria-labelledby="diag-title"><header><h3 id="diag-title">发现 ${risks.length} 项经营风险，可能影响申报</h3><small>来源：模拟开关</small></header><ul>${riskRows}</ul>${serviceRec('risk')}</section>`;
   }
-  // 注销、吊销按“查不到企业”处理：接口返回的字段不用、全部留空（PRD V2.2 8.2.1 第 7 步）。
-  const companyNotFound = task => { const name = (task?.company?.name || '').trim(); return NOT_FOUND_NAMES.includes(name) || Boolean(REVOKED_NAMES[name]); };
-  /* 企业接口给的地区和行业（模拟）：按名称算，同一企业每次一样；查不到的企业不给。
-     演示名单：名称里带“无地区行业”的企业接口没有这两项，用来演示追问。 */
-  const API_PROFILES = { 示例风险科技有限公司: { region: '上海市', industry: '软件信息' }, 示例注销科技有限公司: { region: '北京市', industry: '现代服务' } };
   function apiProfile(name) {
-    const key = (name || '').trim();
-    if (!key || NOT_FOUND_NAMES.includes(key) || REVOKED_NAMES[key] || key.includes('无地区行业')) return { region: '', industry: '' };
-    if (API_PROFILES[key]) return { ...API_PROFILES[key] };
-    const hash = [...key].reduce((sum, char) => (sum * 31 + char.codePointAt(0)) % 9973, 7);
-    const regions = fieldOptions('region'), industries = fieldOptions('industry');
-    return { region: regions[hash % regions.length] || '', industry: industries[(hash >> 3) % industries.length] || '' };
+    const key = (name || '').trim(), company = REAL_COMPANIES[key];
+    if (!key || !company || REVOKED_NAMES[key] || sim('apiTimeout')) return { region: '', industry: '' };
+    return { region: company.region, industry: company.industry };
   }
-  const notFoundNotice = task => companyNotFound(task) ? `<div class="company-notfound" role="status"><p><strong>没有查到「${esc(task.company.name)}」的工商信息。</strong>请核对企业全称是否和营业执照一致。下面的结果只按您填写的信息匹配，信息还不完整，补充专利、软著等信息后结果更准。</p><button type="button" class="text-button" data-action="portrait-edit" data-task="${esc(task.id)}">修改企业名称或补充信息</button></div>` : '';
+  const notFoundNotice = task => companyApiFailed(task) ? `<div class="company-notfound" role="status"><p><strong>企业信息暂时查询失败，请稍后重试。</strong>下面的结果只按您填写的信息匹配。</p><button type="button" class="text-button" data-action="company-retry" data-task="${esc(task.id)}">重试</button></div>` : companyNotFound(task) ? `<div class="company-notfound" role="status"><p><strong>没有查到「${esc(task.company.name)}」的工商信息。</strong>请核对企业全称是否和营业执照一致。下面的结果只按您填写的信息匹配，信息还不完整，补充专利、软著等信息后结果更准。</p><button type="button" class="text-button" data-action="portrait-edit" data-task="${esc(task.id)}">修改企业名称或补充信息</button></div>` : '';
   function mockCompanyData(task) {
     const name = task?.company?.name;
     if (!name) return null;
-    const hash = [...name].reduce((sum, char) => (sum * 31 + char.codePointAt(0)) % 9973, 7);
-    const defaults=companyNotFound(task)?{patents:null,copyrights:null}:{patents:hash%4,copyrights:(hash>>2)%5};
+    // 专利、软著数量还没有核实到公开来源，接口一律不给，用户可以自己补充。
+    const defaults={patents:null,copyrights:null};
     const answers=answersOf(task);
     return Object.fromEntries(Object.entries(defaults).map(([key,value])=>{
       const field=`metric_${key}`;
@@ -529,15 +538,13 @@
     const pick = label => company.find(([key]) => key === label)?.[1] || '';
     return [['企业名称', task.company.name], ['所在地区', region], ['所属行业', industry], ['成立年限', pick('成立年限')], ['企业规模', pick('企业规模')], ['专利数量', pick('专利数量')], ['软件著作权', pick('软件著作权')], ...questions.map(question => [question.label, answers[question.key]])];
   }
-  /* 工商状态为注销、吊销：提示异常，不进入匹配（PRD 8.1.3）。演示用这个名字触发。 */
-  const REVOKED_NAMES = { '示例注销科技有限公司': '注销' };
-  const companyRevoked = task => REVOKED_NAMES[(task?.company?.name || '').trim()] || '';
   const companyRows = task => {
     const data = mockCompanyData(task);
     if (!data) return [];
-    const name = task.company.name || '', hash = [...name].reduce((sum, char) => (sum * 31 + char.codePointAt(0)) % 9973, 7);
-    const answers = answersOf(task);
-    const base = companyNotFound(task) ? [['成立年限', answers.founded || ''], ['企业规模', answers.scale || '']] : [['成立年限', `${1 + hash % 12} 年`], ['企业规模', `${20 + (hash >> 2) % 280} 人`]];
+    const answers = answersOf(task), founded = companyNotFound(task) ? '' : REAL_COMPANIES[companyKey(task)]?.founded || '';
+    // 成立年限按工商成立日期算到今天；人数没有核实到公开来源，只用用户填写的。
+    const years = founded ? Math.max(0, Math.floor((Date.parse(today()) - Date.parse(founded)) / 31557600000)) : null;
+    const base = [['成立年限', years === null ? answers.founded || '' : `${years} 年`], ['企业规模', answers.scale || '']];
     return [...base, ['专利数量', data.patents===null?(companyNotFound(task)?'':'待核实'):`${data.patents} 个`], ['软件著作权', data.copyrights===null?(companyNotFound(task)?'':'待核实'):`${data.copyrights} 个`]];
   };
 
@@ -559,7 +566,7 @@
   }
   function policyMetrics(task, policy) {
     const data = mockCompanyData(task);
-    return (mockThresholds[policy.supportType] || []).map(rule => rule.interval ? (() => { const r = revenueCheck(task, rule.need, rule.key); return { ...rule, ...r, met: r.have !== null && r.have >= rule.need }; })() : ({ ...rule, have: data ? data[rule.key] : null, met: data && data[rule.key]!==null ? data[rule.key] >= rule.need : false }));
+    return policyRules(policy).map(rule => rule.interval ? (() => { const r = revenueCheck(task, rule.need, rule.key); return { ...rule, ...r, met: r.have !== null && r.have >= rule.need }; })() : ({ ...rule, have: data ? data[rule.key] : null, met: data && data[rule.key]!==null ? data[rule.key] >= rule.need : false }));
   }
 
   const metricUnit = unit => unit === '人' ? '名' : unit;
@@ -820,7 +827,7 @@
   function interpretFooter(task,policy) {
     const status=statusOf(policy),chosen=task.steps.match&&task.policyId===policy.id;
     const noTemplate=hasNoTemplate(policy);
-    return `<footer class="interpret-footer"><div><span>下一步</span><strong>${status==='closed'?'本期申报已截止':status==='notice'&&!chosen?'暂未开放申报，开放后再来申报':noTemplate?'这项政策没有申报模板，按办理指引准备':'整理本项政策的申报材料'}</strong></div>${status==='open'||chosen?`<button type="button" class="button button-primary" data-action="interpret-apply" data-task="${esc(task.id)}" data-policy="${esc(policy.id)}">${noTemplate?'查看办理指引':chosen?'去准备材料':'申报这项政策'} ${icon('arrow')}</button>`:`<a class="text-button" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看政策原文 ${icon('arrow')}</a>`}</footer>`;
+    return `<footer class="interpret-footer"><div><span>下一步</span><strong>${status==='closed'?'本期申报已截止':status==='notice'&&!chosen?(ongoing(policy)?'按纳税期常态办理，不是集中申报，到税务机关办理':'暂未开放申报，开放后再来申报'):noTemplate?'这项政策没有申报模板，按办理指引准备':'整理本项政策的申报材料'}</strong></div>${status==='open'||chosen?`<button type="button" class="button button-primary" data-action="interpret-apply" data-task="${esc(task.id)}" data-policy="${esc(policy.id)}">${noTemplate?'查看办理指引':chosen?'去准备材料':'申报这项政策'} ${icon('arrow')}</button>`:`<a class="text-button" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看政策原文 ${icon('arrow')}</a>`}</footer>`;
   }
   /* 对照表的“编辑”在现状格里原地改，同一时间只开一行。 */
   let interpretEditKey = '';
@@ -882,7 +889,7 @@
     const result=policyScore(task,policy),rows=result?.rows||comparisonRows(task,policy),materials=rows.find(row=>row.key==='materials');
     const pending=rows.filter(row=>row.status!=='ready'&&row.key!=='materials').length;
     const facts=[['支持方向',policy.supportType],['适用地区',policy.region],['申报时间',confOf(policy,'applicationEnd')==='low'?'见政策原文':windowText(policy),confTag(confOf(policy,'applicationEnd'))],...(policy.subsidy?[['扶持金额',`${policy.subsidy.prefix||''}${policy.subsidy.value}${policy.subsidy.unit}`,confTag(confOf(policy,'subsidy'))]]:[]),['发布机构',policy.agency]];
-    return `<div class="policy-review"><section class="interpret-overview"><div class="interpret-eyebrow">01 / 了解政策</div><h3><a class="interpret-title" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(policy.title)} ${icon('arrow')}</a></h3><p class="interpret-summary">${esc(policy.summary)}</p><div class="interpret-summary-grid"><dl class="interpret-facts">${facts.map(([label,value,tag=''])=>`<div><dt>${label}</dt><dd>${esc(value)}${tag}</dd></div>`).join('')}</dl><div class="interpret-score-result"><span>匹配度</span><strong data-total-score="${result?.score??''}">${result?result.level:'—'}</strong><div><b>${pending}</b> 项可能不符或未知</div>${suggestPause(result, policy) ? pauseTag : ''}<small>${{ open: '地区、行业只做准入判断，未知不过滤；其余条件每项权重相同，满足越多越高；材料不计入匹配度', notice: '暂未开放申报，可以提前准备', closed: '本期已截止，无法申报' }[statusOf(policy)]}</small></div></div>${conditionsNotice(policy)}</section><section class="interpret-comparison" aria-labelledby="comparison-title"><div class="interpret-section-heading"><span>02</span><div><h3 id="comparison-title">逐项对照，看看还差什么</h3><p>核对企业现状，再准备对应资料。</p></div></div><div class="interpret-table-scroll" tabindex="0" role="region" aria-label="政策条件对照表"><table class="interpret-table"><thead><tr><th scope="col">对照维度</th><th scope="col">政策要求</th><th scope="col">企业现状</th><th scope="col">操作</th></tr></thead><tbody>${rows.map(row=>comparisonRow(task,policy,row)).join('')}</tbody></table></div>${rangeAskInline(task,policy)}<div id="interpret-supplement" aria-live="polite"></div>${policy.applicationTimeNote?`<p class="interpret-time-note">${esc(policy.applicationTimeNote)}</p>`:''}</section>${adviceMarkup(policy,result)}${interpretServices(task,policy,result)}${recommendationMarkup(task,policy,rows)}<p class="interpret-disclaimer">本产品仅提供信息检索、解读与申报指引，不构成申报或权益承诺，最终以政府官方平台审核为准。</p></div>`;
+    return `<div class="policy-review"><section class="interpret-overview"><div class="interpret-eyebrow">01 / 了解政策</div><h3><a class="interpret-title" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(policy.title)} ${icon('arrow')}</a></h3>${sim('interpretFail') ? `<div class="interpret-summary is-failed" role="status"><p>白话解读暂时没有生成，下面先列出从原文提取的字段，请稍后重试。</p><button type="button" class="text-button" data-action="interpret-retry" data-task="${esc(task.id)}" data-policy="${esc(policy.id)}">重试</button></div>` : `<p class="interpret-summary">${esc(policy.summary)}</p>`}<div class="interpret-summary-grid"><dl class="interpret-facts">${facts.map(([label,value,tag=''])=>`<div><dt>${label}</dt><dd>${esc(value)}${tag}</dd></div>`).join('')}</dl><div class="interpret-score-result"><span>匹配度</span><strong data-total-score="${result?.score??''}">${result?result.level:'—'}</strong><div><b>${pending}</b> 项可能不符或未知</div>${suggestPause(result, policy) ? pauseTag : ''}<small>${{ open: '地区、行业只做准入判断，未知不过滤；其余条件每项权重相同，满足越多越高；材料不计入匹配度', notice: ongoing(policy) ? '按纳税期常态办理，不是集中申报' : '暂未开放申报，可以提前准备', closed: '本期已截止，无法申报' }[statusOf(policy)]}</small></div></div>${conditionsNotice(policy)}</section><section class="interpret-comparison" aria-labelledby="comparison-title"><div class="interpret-section-heading"><span>02</span><div><h3 id="comparison-title">逐项对照，看看还差什么</h3><p>核对企业现状，再准备对应资料。</p></div></div><div class="interpret-table-scroll" tabindex="0" role="region" aria-label="政策条件对照表"><table class="interpret-table"><thead><tr><th scope="col">对照维度</th><th scope="col">政策要求</th><th scope="col">企业现状</th><th scope="col">操作</th></tr></thead><tbody>${rows.map(row=>comparisonRow(task,policy,row)).join('')}</tbody></table></div>${rangeAskInline(task,policy)}<div id="interpret-supplement" aria-live="polite"></div>${policy.applicationTimeNote?`<p class="interpret-time-note">${esc(policy.applicationTimeNote)}</p>`:''}</section>${adviceMarkup(policy,result)}${interpretServices(task,policy,result)}${recommendationMarkup(task,policy,rows)}<p class="interpret-disclaimer">本产品仅提供信息检索、解读与申报指引，不构成申报或权益承诺，最终以政府官方平台审核为准。</p></div>`;
   }
 
   function updateInterpretDrawer(task,policy) {
@@ -999,16 +1006,18 @@
   ];
   const wordFixes = [[/我们公司|我司|我们/g, '本企业'], [/(非常|特别|十分)/g, ''], [/很多/g, '多项'], [/搞(?=[一-龥])/g, '开展'], [/弄好/g, '完成'], [/,/g, '，'], [/;/g, '；'], [/(^|[^0-9]):/g, '$1：'], [/[ \t]+/g, ' ']];
 
+  const PENDING_MARKS = /[【\[]待(?:补(?:充)?|核对)(?:[：:]([^】\]]*))?[】\]]/g;
   function reviewMaterial(task, source) {
     const policy = publicPolicies().find(item => item.id === task.policyId);
     const item = policy?.application?.checklist.find(entry => `${policy.id}-${entry.id}` === source.id);
     const unreadable = !source.text.trim() || /^【已上传文件：/.test(source.text);
     if (unreadable) return { unreadable: true, original: '', missing: [], advice: [], polished: '', note: item?.note || '' };
     const text = source.text;
-    // 生成稿末尾“待补充”里列的词不算已写到。
-    const written = text.split(/\n+/).filter(line => !S().hasPendingMark(line)).join('\n');
+    // 只去掉【待补充：…】标记本身再判断写没写到：标记里列的词不算已写到，同一行标记外的正文照常算。
+    const marks = [...text.matchAll(PENDING_MARKS)];
+    const written = text.replace(PENDING_MARKS, '');
     const missing = (item?.expects || []).filter(word => !written.includes(word));
-    const pending = text.split(/\n+/).filter(line => S().hasPendingMark(line)).map(pendingWhat);
+    const pending = [...new Set(marks.map(match => (match[1] || '').trim() || '相关内容'))];
     const advice = [];
     missing.forEach(word => advice.push(`补充“${word}”：政策要求写明，原文没有提到。`));
     if (!missing.length && pending.length) advice.push(`还有待补充的内容：${pending.join('、')}。`);
@@ -1020,7 +1029,8 @@
 
   /* AI 建议：逐条给出原文、问题和改法。目前是规则检查，没有接模型。 */
   const polishLine = line => wordFixes.reduce((value, [from, to]) => value.replace(from, to), line).trim();
-  const pendingWhat = line => line.match(/[：:]([^】\]]*)[】\]]/)?.[1] || line.replace(/[【\[][^】\]]*[】\]]/, '').replace(/^请补充|。$/g, '').trim() || '相关内容';
+  // 取标记里写的内容（【待补充：xxx】的 xxx）；没写就用标记外的文字。
+  const pendingWhat = line => [...line.matchAll(PENDING_MARKS)].map(match => (match[1] || '').trim()).filter(Boolean).join('、') || line.replace(PENDING_MARKS, '').replace(/^请补充|。$/g, '').trim() || '相关内容';
   function adviceItems(text, missing, pending) {
     const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
     const isMeta = line => /^依据文件：/.test(line) || /^(?:[一二三四五六七八九十]+|\d+)、.{0,20}$/.test(line) || S().hasPendingMark(line);
@@ -1283,7 +1293,7 @@
     if (items.length && !missing.length) out.push('申报材料已备齐，可以确认版本');
     else if (items.length && missing.length <= 2 && missing.length < items.length) out.push(`只差 ${missing.length} 份材料就能准备齐：${missing.map(item => item.label).join('、')}`);
     metrics.filter(m => m.have !== null && !m.met && m.need - m.have <= Math.max(1, Math.ceil(m.need / 3))).forEach(m => out.push(`您的${m.label}还差 ${m.need - m.have} ${metricUnit(m.unit)}就达到要求`));
-    if (status === 'notice') out.splice(relax ? 1 : 0, 0, '暂未开放申报，开放后再来申报');
+    if (status === 'notice') out.splice(relax ? 1 : 0, 0, ongoing(policy) ? '按纳税期常态办理，不是集中申报' : '暂未开放申报，开放后再来申报');
     if (!relax) {
       if (region && policy.region === region) out.push(`政策面向${region}，与企业所在地一致`);
       else if (policy.region === '全国') out.push('全国范围的政策，不限地区');
@@ -1293,9 +1303,9 @@
     return [...new Set(out)];
   }
 
-  /* 放宽条件：地区只往上扩一级（市→省，本期没有区县），行业只看同一国标门类下的相邻行业。
-     原型的政策地区只有省级和全国，所以“扩大地区范围”只在企业所在地是地级市时出现。 */
-  const regionParent = { 杭州市: '浙江省', 宁波市: '浙江省', 深圳市: '广东省', 广州市: '广东省', 南京市: '江苏省', 苏州市: '江苏省' };
+  /* 放宽条件：地区只往上扩一级（市→省，本期没有区县）。企业所在市本来就会带上本省和全国的政策，
+     放宽后多出来的是同省其他城市的政策。直辖市没有上一级，不出现“扩大地区范围”。 */
+  const regionParent = { 杭州市: '浙江省', 宁波市: '浙江省', 深圳市: '广东省', 广州市: '广东省', 南京市: '江苏省', 苏州市: '江苏省', 成都市: '四川省', 西安市: '陕西省' };
   const industryGroups = [
     { name: '国标门类 C 制造业', members: ['先进制造', '新能源', '生命健康'] },
     { name: '信息技术和科技服务', members: ['软件信息', '现代服务'] },
@@ -1320,7 +1330,9 @@
   function noHitCard(task, role) {
     const facts = factsOf(task), view = noHitView(task.id), id = esc(task.id);
     const { applied } = view;
-    const pool = applied ? visible(matchPolicies({ ...facts, ...(applied.region ? { region: applied.region } : {}), ...(applied.industry ? { industry: applied.industry } : {}) })) : [];
+    // 只列放宽后新增的政策（同省其他城市的），原来就能看到的全国、本省政策不重复列；已截止的也列出来，卡片上标“已截止”。
+    const before = new Set(matchPolicies(facts).map(item => item.policy.id));
+    const pool = applied ? matchPolicies({ ...facts, ...(applied.region ? { region: applied.region } : {}), ...(applied.industry ? { industry: applied.industry } : {}) }).filter(item => !before.has(item.policy.id)) : [];
     const items = role === 'assembly' ? pool.filter(item => item.status === 'open') : pool;
     const open = items.filter(item => item.status === 'open').length;
     const parent = regionParent[facts.region];
@@ -1360,7 +1372,8 @@
     return item ? `<div class="range-ask is-inline"><p>这项政策要求${rangeNeedText(item)}，您选的是「${esc(item.pick)}」，达到了吗？</p><div class="range-ask-actions">${rangeButtons(task, item, policy.id)}</div></div>` : '';
   }
   function resultMarkup(task) {
-    if (noHit(factsOf(task))) return assistantBubble('暂未找到完全匹配的政策', noHitCard(task, 'match'), 'match');
+    // 查不到企业时，无命中卡片上面同样先提示核对企业名称（PRD 6.3 第 1、2 条）。
+    if (noHit(factsOf(task))) return assistantBubble('暂未找到完全匹配的政策', notFoundNotice(task) + noHitCard(task, 'match'), 'match');
     const matches = visible(matchPolicies(factsOf(task)));
     const openCount = matches.filter(item => item.status === 'open').length;
     // 排序（PRD 8.1.4）：状态 → 档位（高、中、暂无法判断、低）→ 内部分值。
@@ -1388,8 +1401,8 @@
     return [
       !facts.region && 'region',
       !facts.industry && 'industry',
-      notFound && !answers.scale && 'scale',
-      notFound && !answers.founded && 'founded',
+      !companyRows(task).find(([label]) => label === '企业规模')?.[1] && 'scale',
+      !companyRows(task).find(([label]) => label === '成立年限')?.[1] && 'founded',
       !answers.type && 'type',
     ].filter(Boolean);
   }
@@ -1532,7 +1545,7 @@
 
   function handleClick(target) {
     const { action } = target.dataset;
-    if (!['pick-suggest','guidance-prep','check-assign','policy-pick','policy-company-skip','policy-check-confirm','followup-submit','followup-skip','range-answer','copy-official','guidance-service','intake-confirm','service-dismiss','interpret-services-refresh','interpret-todo', 'interpret-apply', 'portrait-edit', 'portrait-cancel', 'portrait-save', 'home-intake-finish', 'intake-edit', 'intake-start', 'intake-remove-file', 'intake-result', 'match-chat', 'match-apply', 'match-drawer', 'match-drawer-close', 'nohit-pick', 'nohit-confirm', 'nohit-service'].includes(action)) return false;
+    if (!['pick-suggest','guidance-prep','check-assign','policy-pick','policy-company-skip','policy-check-confirm','followup-submit','followup-skip','range-answer','copy-official','guidance-service','intake-confirm','service-dismiss','interpret-services-refresh','interpret-todo', 'interpret-apply', 'portrait-edit', 'portrait-cancel', 'portrait-save', 'home-intake-finish', 'intake-edit', 'intake-start', 'intake-remove-file', 'intake-result', 'match-chat', 'match-apply', 'match-drawer', 'match-drawer-close', 'nohit-pick', 'nohit-confirm', 'nohit-service', 'company-retry', 'interpret-retry'].includes(action)) return false;
     if (action === 'policy-pick') {
       pick.policyId = target.dataset.policy;
       window.PolicyUI.refresh();
@@ -1654,6 +1667,18 @@
       window.PolicyUI.refresh();
       document.querySelector('[data-action="nohit-confirm"]')?.focus({ preventScroll: true });
       document.querySelector('.nohit-results')?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
+      return true;
+    }
+    if (action === 'company-retry') {
+      if (sim('apiTimeout')) { window.PolicyUI.toast('还是查询失败，请稍后再试。'); return true; }
+      if (!S().updateTask(task.id, { company: { name: task.company.name, ...apiProfile(task.company.name) } })) { window.PolicyUI.toast('未能保存，请重试。'); return true; }
+      window.PolicyUI.refresh(); window.PolicyUI.toast('已重新查询企业信息。');
+      return true;
+    }
+    if (action === 'interpret-retry') {
+      const picked = publicPolicies().find(item => item.id === target.dataset.policy);
+      if (sim('interpretFail')) { window.PolicyUI.toast('白话解读还是没有生成，请稍后再试。'); return true; }
+      if (picked) updateInterpretDrawer(task, picked);
       return true;
     }
     if (action === 'nohit-service') {
@@ -1781,7 +1806,7 @@
   const pick = { work: '', query: '', results: null, policyId: '' };
   const POLICY_STATUS = { open: '正在申报', notice: '暂未开放', closed: '已截止' };
   const PICK_GREETING = {
-    assembly: '您要申报哪项政策？输入政策名称或关键词就行，比如“数字化改造补贴”“智能电网专项”。',
+    assembly: '您要申报哪项政策？输入政策名称或关键词就行，比如“住建领域创新应用场景”“重点应用场景”。',
     guidance: '材料准备好了？先告诉我申报哪项政策，我帮您核对材料是否齐全，再告诉您去哪里提交。',
   };
   function searchPolicies(query) {
@@ -1815,7 +1840,7 @@
   }
   function companyAsk(work, policy) {
     const status = statusOf(policy);
-    const note = status === 'closed' ? '这项政策本期已截止，可以为下一批提前准备。' : status === 'notice' ? '这项政策暂未开放申报，开放后再来申报。' : '';
+    const note = status === 'closed' ? '这项政策本期已截止，可以为下一批提前准备。' : status === 'notice' ? (ongoing(policy) ? '这项政策按纳税期常态办理，不是集中申报。' : '这项政策暂未开放申报，开放后再来申报。') : '';
     const why = work === 'guidance' ? '<p class="policy-company-why">填了企业名称，我会核对材料里的企业信息和工商信息是否一致；不填也能核对材料和看办事指南。</p>' : '';
     // V2.3：企业名称在下方输入框里填；办理指引可以点输入框上方的“先跳过”。
     return assistantBubble(`好的，「${policy.title}」。${note}这项政策给哪家企业申报？在下方输入企业全称。`, why ? `<div class="intake-card policy-company-note">${why}</div>` : '', work);
@@ -1832,7 +1857,7 @@
     const choosingCompany = Boolean(pick.policyId && pick.work === work);
     const chips = choosingCompany
       ? (work === 'guidance' ? '<button type="button" data-action="policy-company-skip">先跳过</button>' : '')
-      : ['数字化改造补贴', '智能电网专项'].map(text => `<button type="button" data-action="pick-suggest" data-text="${esc(text)}">${esc(text)}</button>`).join('');
+      : ['住建领域创新应用场景', '重点应用场景'].map(text => `<button type="button" data-action="pick-suggest" data-text="${esc(text)}">${esc(text)}</button>`).join('');
     const placeholder = choosingCompany ? '输入企业全称' : pick.results ? '换个关键词再查，或输入政策名称、文号、原文链接' : '输入政策名称、关键词、文号或原文链接';
     return `<div class="chat-composer pick-composer"><div class="chat-suggestions">${chips}</div><form id="pick-composer-form" data-work="${esc(work)}" data-mode="${choosingCompany ? 'company' : 'policy'}"><label class="sr-only" for="pick-message">${choosingCompany ? '企业名称' : '政策名称'}</label><textarea id="pick-message" name="message" rows="1" maxlength="300" placeholder="${esc(placeholder)}"></textarea><button type="submit" class="icon-button chat-send" aria-label="发送">${icon('arrow')}</button></form></div>`;
   }
@@ -1874,7 +1899,7 @@
       ['所在地区', policy.region === '全国' ? '不限地区' : policy.region, facts.region ? known(facts.region, '企业接口') : chips('region', [...fieldOptions('region'), '其他地区'], '')],
       ['所属行业', policy.industries.join('、') || '以原文为准', facts.industry ? known(facts.industry, '企业接口') : chips('industry', [...fieldOptions('industry'), '其他行业'], '')],
     ];
-    (mockThresholds[policy.supportType] || []).forEach(rule => {
+    policyRules(policy).forEach(rule => {
       const need = `≥ ${rule.need}${rule.unit === '%' ? '' : ' '}${rule.unit}`;
       if (rule.interval) {
         const question = questions.find(item => item.key === rule.key);
@@ -2026,6 +2051,22 @@
     if (!name) { window.PolicyUI.toast(pick.work === 'guidance' ? '请填写企业名称，或点“先跳过”。' : '请填写企业名称。'); return; }
     startFromPick(name);
   }, true);
+
+  /* 政策的材料清单改了以后，已经选过这项政策的任务按新清单刷新：已上传的资料保留，新清单里没有的空项去掉。 */
+  function syncApplications() {
+    (S()?.getState().tasks || []).forEach(task => {
+      const policy = publicPolicies().find(item => item.id === task.policyId);
+      const items = policy?.application?.checklist;
+      if (!items) return;
+      const want = items.filter(item => item.kind !== 'condition').map(item => `${policy.id}-${item.id}`);
+      const have = (task.requirements || []).filter(item => item.kind === 'material').map(item => item.id);
+      if (want.length === have.length && want.every((id, index) => id === have[index])) return;
+      const patch = applicationPatch(task, policy);
+      const sources = patch.sources.filter(source => source.provided || want.includes(source.id) || !source.id.startsWith(`${policy.id}-`));
+      S().updateTask(task.id, { sources, requirements: patch.requirements });
+    });
+  }
+  try { syncApplications(); } catch (error) { console.error('材料清单同步失败', error); }
 
   window.PolicyMatch = Object.freeze({ expiredNotice, pickComposer, prepOpen, policyFirstMarkup, policyCheckMarkup, policyCheckNote, guidanceCheckMarkup, resetPick, stepInfo, apiProfile, portraitRows, PORTRAIT_LABELS, companyNotFound, resetGuest, noTemplateNotice, quickIntakeMarkup, assemblyPicker, refreshMaterialReview, forgetUpload, closeDrawer, handleClick, intakeActive, intakeMarkup, matchChatMarkup, matchPending, openCount, composerAttach, questions, understanding, beginPortrait, portraitLoading, portraitEditing, portraitEditor, scoreText, openMaterialReview, reviewMaterial, materialAdvice, maskedHtml, companyRows, policyMetrics, openHomeIntake, homeIntakeMarkup, rememberUpload, adoptUploads, uploadsMarkup, interpretMarkup, interpretPicking, guestMarkup, guestAsk, finishGuest, applicationIntro, applicationNote, guidanceMarkup, guidanceDetail, policyDetail, versionReview });
 })();

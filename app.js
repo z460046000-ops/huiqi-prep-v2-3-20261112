@@ -117,7 +117,7 @@
     });
     return S.updateTask(task.id,{requirements,steps:{diagnosis:true},status:requirements.some(item=>item.status !== 'ready' && item.required !== false) ? 'needs-input':'processing'});
   }
-  const allowedRoutes = new Set(['dashboard','home-classic','batch','expert','new','services','library','task','profile','policy','diagnosis','assembly','guidance','version','compare','source']);
+  const allowedRoutes = new Set(['scenarios','dashboard','home-classic','batch','expert','new','services','library','task','profile','policy','diagnosis','assembly','guidance','version','compare','source']);
   function currentRoute() {
     const [route, raw = ''] = location.hash.slice(1).split('?');
     return { route: allowedRoutes.has(route) ? route : 'dashboard', params: Object.fromEntries(new URLSearchParams(raw)) };
@@ -213,11 +213,18 @@
     const renderers = {
       dashboard:() => ['interpret','assembly','guidance'].includes(params.work) ? W.renderStart(params.work,{name:companyStartDraft,...startDraft}) : V.startHome(), 'home-classic':() => V.dashboard({filter:params.filter}), new:() => V.newTask({intent:params.intent}), services:() => V.services({type:params.type,query:params.query}),
       batch:() => B.render(),
+      scenarios:() => window.PolicyScenarios.render(),
       expert:() => task ? '' : V.expertEntry(validService(params.service)),
       library:() => M.renderLibrary(params.company), task:() => '', policy:() => V.policy(taskId,params.policy || params.id),
       assembly:() => M.renderAssembly(taskId), guidance:() => V.guidance(taskId),
       version:() => M.renderVersion(params.id), compare:() => M.renderCompare(params.left,params.right), source:() => renderSource(taskId,params.id),
     };
+    // 未登录（模拟开关）：先单点登录，登录后回到原页面（PRD 6.3 第 22 条）。
+    if (window.PolicySim?.on('loggedOut')) {
+      document.body.classList.remove('in-project');
+      page.innerHTML = '<div class="login-gate"><h1>请先登录万大圣账号</h1><p>登录后会回到当前页面。</p><button type="button" class="button button-primary" data-action="sim-login">登录</button></div>';
+      return;
+    }
     try {
       const content = renderers[route]();
       page.innerHTML = isProject ? W.render(taskId,{workId,content,route,capabilities}) : content;
@@ -482,6 +489,8 @@
     if (target.matches('[data-source-upload]')) {
       const taskId=target.dataset.task,sourceId=target.dataset.source,file=target.files?.[0];
       if(!S.getTask(taskId) || !file)return;
+      // 上传失败（模拟开关）：不保存，已生成的内容不受影响（PRD 6.3 第 20 条）。
+      if(window.PolicySim?.on('uploadFail')){target.value='';toast('上传失败，请重试。已生成的内容不受影响。');return;}
       window.PolicyMatch?.rememberUpload(file,taskId,'assembly',sourceId);
       M.rememberFile(taskId,sourceId,file);
       // 能读出文字就存原文用于解析；读不出的只记文件名，并在解析里说明。
@@ -489,7 +498,7 @@
         const task=S.getTask(taskId);
         if(!task)return;
         if(!updateSource(task,sourceId,text || `【已上传文件：${file.name}，请人工核对内容】`,'',file.name)){toast('资料未能保存，请重试。');return;}
-        render();window.PolicyMatch?.refreshMaterialReview(S.getTask(taskId),sourceId);toast(text ? '已上传并读取内容。' : '已上传。');
+        render();window.PolicyMatch?.refreshMaterialReview(S.getTask(taskId),sourceId);toast(text ? '已上传并读取内容。' : '已上传，但读不出文字。建议上传 Word 或文本版。');
       });
       return;
     }
