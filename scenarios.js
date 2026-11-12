@@ -72,9 +72,9 @@
   }
 
   const items = [
-    { n: 1, stage: '信息采集', title: '查不到企业', how: '输入不完整的企业名称「北京久其金建科技公司」，工商信息查不到。', run: async () => { await mk('北京久其金建科技公司', { type: '有限责任公司' }); await focus('.company-notfound'); } },
-    { n: 1, sub: '接口失败', stage: '信息采集', title: '企业接口失败或超时', how: '真实接口故障无法复现，用模拟开关。不提示核对名称，提示稍后重试。', sims: ['apiTimeout'], run: async () => { await mk(JINJIAN, { type: '有限责任公司' }); await focus('.company-notfound'); } },
-    { n: 2, stage: '信息采集', title: '企业已注销、吊销', how: '北京华宇信码技术有限公司，2026年6月29日完成注销登记（华宇软件公告）。', run: async () => { await mk('北京华宇信码技术有限公司', { type: '有限责任公司' }); await focus('.company-notfound, .company-blocked'); } },
+    { n: 1, stage: '信息采集', title: '查不到企业', how: '输入不完整的企业名称「北京久其金建科技公司」，工商信息查不到。', run: async () => { await mk('北京久其金建科技公司', { type: '有限责任公司' }); await focus('.match-nohit'); } },
+    { n: 1, sub: '接口失败', stage: '信息采集', title: '企业接口失败或超时', how: '真实接口故障无法复现，用模拟开关。不提示核对名称，提示稍后重试。', sims: ['apiTimeout'], run: async () => { await mk(JINJIAN, { type: '有限责任公司' }); await focus('.match-nohit'); } },
+    { n: 2, stage: '信息采集', title: '企业已注销、吊销', how: '北京华宇信码技术有限公司，2026年6月29日完成注销登记（华宇软件公告）。', run: async () => { await mk('北京华宇信码技术有限公司', { type: '有限责任公司' }); await focus('.match-nohit'); } },
     { n: 3, stage: '信息采集', title: '一个字段都不选就点“确定”', how: '久其金建什么都不选。地区、行业、成立年限由企业接口预填，其余显示“待补充”。', run: async () => { await mk(JINJIAN, {}, 'confirm'); await focus('.portrait-confirm, [data-action="intake-confirm"]'); } },
     { n: 4, stage: '信息采集', title: '正在申报的政策少于 3 条', how: '上海久其软件有限公司：上海只有智能电网专项 1 条正在申报，企业规模、成立年限没有公开数据，追问一轮。', run: async () => { await mk('上海久其软件有限公司', { type: '有限责任公司' }); await focus('.intake-followup'); } },
     { n: 5, stage: '匹配', title: '无命中', how: '成都久其软件有限公司：成都、四川和全国都没有正在申报的政策。', run: async () => { await mk('成都久其软件有限公司', { type: '有限责任公司' }); await focus('.match-nohit'); } },

@@ -1327,6 +1327,12 @@
     return `<fieldset class="intake-question nohit-row"><legend>${title}</legend><div class="match-options">${chips}</div>${hint ? `<p class="nohit-hint">${esc(hint)}</p>` : ''}</fieldset>`;
   }
 
+  function noHitTitle(task) {
+    if (companyApiFailed(task)) return '企业信息暂时查询失败，暂未找到完全匹配的政策。';
+    if (companyNotFound(task)) return `没有查到「${task.company.name}」的工商信息，暂未找到完全匹配的政策。`;
+    return '暂未找到完全匹配的政策。';
+  }
+
   function noHitCard(task, role) {
     const facts = factsOf(task), view = noHitView(task.id), id = esc(task.id);
     const { applied } = view;
@@ -1342,10 +1348,15 @@
     const cond = applied ? relaxText(applied) : '';
     const heading = !items.length ? `按「${cond}」还是没有合适的政策，可以问问人工客服` : `以下政策根据「${cond}」查到${open ? `，${open} 项正在申报` : '，暂无正在申报的，可以先了解'}`;
     const results = applied ? `<div class="nohit-results"><div class="match-result-bar"><p class="match-result-heading">${heading}</p>${role === 'match' && items.length ? onlyOpenToggle() : ''}</div>${items.length ? `<p class="nohit-note">这些政策的${applied.region ? '地区' : ''}${applied.region && applied.industry ? '和' : ''}${applied.industry ? '行业' : ''}和企业情况不完全一致，申报前请核对要求。</p><div class="match-policy-grid">${items.map(item => compactCard(task, item, false, `按${cond}查到，申报前请核对${[applied.region && '地区', applied.industry && '行业'].filter(Boolean).join('和')}要求`)).join('')}</div>` : ''}</div>` : '';
+    const failed = companyApiFailed(task), hasCompany = failed || companyNotFound(task);
+    const focusAttrs = ' id="match-result-heading" tabindex="-1"';
+    const company = hasCompany ? `<div class="nohit-company"><p${focusAttrs}>${failed ? '按您填写的信息匹配，可以稍后重试查询企业信息。' : '请核对企业全称是否和营业执照一致；也可以补充所在地区、行业后重新匹配。'}</p><button type="button" class="text-button" data-action="${failed ? 'company-retry' : 'portrait-edit'}" data-task="${id}">${failed ? '重试' : '修改企业名称或补充信息'}</button></div>` : '';
+    const relax = rows ? `<div class="nohit-relax"><p${hasCompany ? '' : focusAttrs} class="match-result-heading">可以放宽条件再看看</p><div class="nohit-rows">${rows}</div><div class="nohit-confirm"><button type="button" class="button button-primary" data-action="nohit-confirm" data-task="${id}"${canConfirm ? '' : ' disabled'}>确定</button></div>${results}</div>` : '';
+    const serviceFocus = !hasCompany && !rows ? focusAttrs : '';
     const service = view.service
-      ? '<p class="nohit-service-done" role="status" tabindex="-1">已通知人工客服，稍后会联系您。</p>'
-      : `<p>需要人帮您看看？</p><button type="button" class="button button-secondary" data-action="nohit-service" data-task="${id}">联系人工客服</button>`;
-    return `<div class="intake-card match-result match-nohit${onlyOpen ? ' only-open' : ''}"><p id="match-result-heading" class="match-result-heading" tabindex="-1">${rows ? '可以放宽条件再看看' : '企业所在地和行业都没有可以放宽的范围'}</p>${rows ? `<div class="nohit-rows">${rows}</div><div class="nohit-confirm">` : '<div hidden>'}<button type="button" class="button button-primary" data-action="nohit-confirm" data-task="${id}"${canConfirm ? '' : ' disabled'}>确定</button></div>${results}<div class="nohit-service">${service}</div></div>`;
+      ? `<p${serviceFocus} class="nohit-service-done" role="status"${serviceFocus ? '' : ' tabindex="-1"'}>已通知人工客服，稍后会联系您。</p>`
+      : `<p${serviceFocus}>需要人帮您看看？</p><button type="button" class="button button-secondary" data-action="nohit-service" data-task="${id}">联系人工客服</button>`;
+    return `<div class="intake-card match-result match-nohit${onlyOpen ? ' only-open' : ''}">${company}${relax}<div class="nohit-service">${service}</div></div>`;
   }
 
   /* 区间跨过门槛的追问：同一门槛只问一次，答过（含“不确定”）就不再弹。 */
@@ -1373,7 +1384,7 @@
   }
   function resultMarkup(task) {
     // 查不到企业时，无命中卡片上面同样先提示核对企业名称（PRD 6.3 第 1、2 条）。
-    if (noHit(factsOf(task))) return assistantBubble('暂未找到完全匹配的政策', notFoundNotice(task) + noHitCard(task, 'match'), 'match');
+    if (noHit(factsOf(task))) return assistantBubble(noHitTitle(task), noHitCard(task, 'match'), 'match');
     const matches = visible(matchPolicies(factsOf(task)));
     const openCount = matches.filter(item => item.status === 'open').length;
     // 排序（PRD 8.1.4）：状态 → 档位（高、中、暂无法判断、低）→ 内部分值。
@@ -1432,7 +1443,7 @@
 
   /* 从申报辅助进来还没选政策：列出正在申报的政策，选好后才知道要备哪些材料。 */
   function assemblyPicker(task) {
-    if (noHit(factsOf(task))) return assistantBubble('暂未找到完全匹配的政策', noHitCard(task, 'assembly'), 'assembly');
+    if (noHit(factsOf(task))) return assistantBubble(noHitTitle(task), noHitCard(task, 'assembly'), 'assembly');
     const cards = openFits(factsOf(task)).map((item, index) => compactCard(task, item, index === 0)).join('');
     return assistantBubble(`请选择「${task.company.name}」要申报的政策，选好后我按它列出要准备的材料。`, `<div class="intake-card match-result"><div class="match-policy-grid">${cards}</div></div>`, 'assembly');
   }
