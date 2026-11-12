@@ -133,9 +133,9 @@
   }
 
   function seedState() {
-    const tasks = DATA.seedTasks.map((task) => normalizeTask(clone(task)));
+    const tasks = [];
     return {
-      schemaVersion: 1, tasks, versions: DATA.seedVersions.map((version) => normalizeVersion(clone(version), tasks)), activeTaskId: tasks[0]?.id || null,
+      schemaVersion: 1, tasks, versions: [], activeTaskId: tasks[0]?.id || null,
       draft: '', storageAvailable: true, storageError: '', dirty: false, loadWarning: '',
     };
   }
