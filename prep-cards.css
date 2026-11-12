@@ -9,7 +9,7 @@
 .prep-progress strong{display:block;font-size:13px;line-height:1.5;font-weight:600;color:#33465f}
 .prep-progress-track{display:block;height:5px;margin-top:6px;border-radius:99px;background:#dfe5ee;overflow:hidden}
 .prep-progress-track i{display:block;height:100%;border-radius:99px;background:#1f5fd6;transition:width .25s ease}
-.prep-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.prep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-top:10px}
 .prep-stack{display:grid;gap:10px}
 .prep-subhead{margin:12px 0 6px;font-size:12px;line-height:1.5;font-weight:600;color:#62748b}
 

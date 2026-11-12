@@ -59,7 +59,12 @@
   async function focus(selector) {
     const el = await waitFor(selector, 8000);
     if (!el) return;
-    (el.closest('.chat-message-row') || el).scrollIntoView({ block: 'center' });
+    // 整个气泡放得下就居中；气泡比可视区高时，把要看的那块滚到顶部，免得落在屏幕外。
+    const row = el.closest('.chat-message-row') || el;
+    const view = row.closest('.chat-scroll-region') || document.scrollingElement;
+    if (row.getBoundingClientRect().height <= (view.clientHeight || window.innerHeight) - 24) row.scrollIntoView({ block: 'center' });
+    else el.scrollIntoView({ block: 'start' });
+    await sleep(300);
     el.classList.add('scenario-flash');
     setTimeout(() => el.classList.remove('scenario-flash'), 2400);
   }
@@ -78,7 +83,7 @@
     { n: 3, stage: '信息采集', title: '一个字段都不选就点“确定”', how: '久其金建什么都不选。地区、行业、成立年限由企业接口预填，其余显示“待补充”。', run: async () => { await mk(JINJIAN, {}, 'confirm'); await focus('.portrait-confirm, [data-action="intake-confirm"]'); } },
     { n: 4, stage: '信息采集', title: '正在申报的政策少于 3 条', how: '上海久其软件有限公司：上海只有智能电网专项 1 条正在申报，企业规模、成立年限没有公开数据，追问一轮。', run: async () => { await mk('上海久其软件有限公司', { type: '有限责任公司' }); await focus('.intake-followup'); } },
     { n: 5, stage: '匹配', title: '无命中', how: '成都久其软件有限公司：成都、四川和全国都没有正在申报的政策。', run: async () => { await mk('成都久其软件有限公司', { type: '有限责任公司' }); await focus('.match-nohit'); } },
-    { n: 6, stage: '匹配', title: '放宽条件后查到政策', how: '广东久其软件有限公司（广州）：本市和广东省没有正在申报的，扩大到广东省后查到深圳的政策（已截止）。', run: async () => { await mk('广东久其软件有限公司', { type: '有限责任公司' }); await press('[data-action="nohit-pick"][data-key="region"]'); await sleep(300); await press('[data-action="nohit-confirm"]'); await focus('.nohit-results'); } },
+    { n: 6, stage: '匹配', title: '放宽条件后查到政策', how: '广东久其软件有限公司（广州）：本市和广东省没有正在申报的，扩大到广东省后查到深圳的政策（已截止）。', run: async () => { await mk('广东久其软件有限公司', { type: '有限责任公司' }); await press('[data-action="nohit-pick"][data-key="region"]'); await sleep(300); await press('[data-action="nohit-confirm"]'); await focus('#match-result-heading'); } },
     { n: 7, stage: '匹配', title: '放宽后仍无结果', how: '成都久其软件有限公司：扩大到四川省后仍然没有，转人工客服。', run: async () => { await mk('成都久其软件有限公司', { type: '有限责任公司' }); await press('[data-action="nohit-pick"][data-key="region"]'); await sleep(300); await press('[data-action="nohit-confirm"]'); await sleep(500); await press('[data-action="nohit-service"]'); await focus('.match-nohit'); } },
     { n: 8, stage: '匹配', title: '区间条件跨过门槛', how: '2026年度北京高新技术企业认定要求研发费占比不低于 4%（营收 5000 万至 2 亿元一档）。久其金建选“3%-4%”，跨过门槛记“待确认”。北京正在申报的政策不少于 3 条，所以不追问。这项认定已于 9 月 24 日截止。', run: async () => { await mk(JINJIAN, { ...FULL, rd: '3%-4%' }); await openPolicy('bj-hitech-2026'); await focus('#match-drawer .interpret-table'); } },
     { n: 9, stage: '匹配', title: '匹配度为低、行业不符', how: 'AI4Chip 项目只面向经开区集成电路企业，久其金建做建筑行业信息化。', run: async () => { await mk(JINJIAN, FULL); await focus('[data-policy="bj-ai4chip-2026"]'); } },

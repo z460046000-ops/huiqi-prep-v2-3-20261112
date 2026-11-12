@@ -13,6 +13,7 @@
   const indexPositions = new Map();
   let confirmationFocus = null;
   let companyStartDraft = '';
+  let guestConversation = 0;
   const startDraft = {files:[],question:''};
   const expertCompanyDrafts = new Map();
   const serviceWork = {profile:'profile',search:'match',interpret:'interpret',diagnosis:'diagnosis',assembly:'assembly',guidance:'guidance'};
@@ -184,7 +185,7 @@
       if(['task','expert'].includes(previousWorkspace.dataset.viewRoute))indexPositions.set(previousWorkspace.dataset.task,previousContextTop);
       else documentPositions.set(previousWorkspace.dataset.documentKey,previousContentTop);
     }
-    window.PolicyChat.captureView();
+    const previousChatView = window.PolicyChat.captureView();
     const {route,params} = currentRoute();
     if (route === 'profile' || route === 'diagnosis') {
       const legacyTask=params.task || params.id || S.getState().activeTaskId;
@@ -207,6 +208,8 @@
     const workId = task ? W.selectedWork(task,route==='expert' ? serviceWork[validService(params.service || serviceForWork(params.work))] : params.work || routeWork[route]) : '';
     const capabilities = route==='expert' || params.experts==='1' || ['interpret','guidance'].includes(workId);
     const nextDocumentKey=documentKey(taskId,route,params);
+    // 右侧文档路由不属于对话身份；同一任务、同一步骤打开抽屉仍是原对话。
+    const nextChatKey = isProject ? documentKey(taskId,'task',{id:workId}) : `${documentKey('guest',route,{id:params.work || params.service || ''})}:${guestConversation}`;
     if (task && isProject && task.selectedWorkId !== workId) S.updateTask(task.id,{selectedWorkId:workId});
     // 选好政策后直接核对，用户看到的就是结果。
     if (task && ['task','expert'].includes(route) && workId === 'assembly' && task.steps.match && !task.steps.diagnosis) runDiagnosis(S.getTask(task.id));
@@ -228,6 +231,7 @@
     try {
       const content = renderers[route]();
       page.innerHTML = isProject ? W.render(taskId,{workId,content,route,capabilities}) : content;
+      page.dataset.chatDocumentKey = nextChatKey;
       const workspace=page.querySelector('.project-workspace');
       if(workspace)workspace.dataset.documentKey=nextDocumentKey;
       document.body.classList.toggle('in-project',Boolean(page.querySelector('.project-workspace')));
@@ -243,7 +247,6 @@
     B.syncSelection();
     window.PolicyHomeFeed?.mount();
     document.title = '企政策智能体V2.3';
-    window.PolicyChat.restoreView();
     restoreFormDraft();
     const documentContent=page.querySelector('.workspace-content');
     if(documentContent)documentContent.scrollTop=documentPositions.get(nextDocumentKey) || 0;
@@ -257,7 +260,7 @@
       focusTarget?.focus({preventScroll:true});
     } else {
       page.focus({preventScroll:true});
-      window.scrollTo({top:0,behavior:'instant'});
+      if (previousChatView.documentKey !== nextChatKey) window.scrollTo({top:0,behavior:'instant'});
     }
     syncExpertControls();
     const cards = page.querySelector('.workspace-status-grid');
@@ -279,6 +282,7 @@
       page.querySelector('.work-status-card[aria-selected="true"]')?.focus({preventScroll:true});
       confirmationFocus=null;
     }
+    window.PolicyChat.restoreView({ previous: previousChatView });
   }
   window.PolicyUI = Object.freeze({escape,icon,navigate,advanceWork,toast,refresh:render,getPendingDraft,getCompanyDraft:service=>service ? expertCompanyDrafts.get(service) || '' : companyStartDraft,clearCompanyDraft:()=>{companyStartDraft='';}});
   document.querySelectorAll('[data-icon]').forEach(element => {element.innerHTML = icon(element.dataset.icon);});
@@ -330,6 +334,7 @@
       return;
     }
     if (target.dataset.action==='nav-work') {
+      guestConversation += 1;
       // 在项目里就切到这个项目的对应标签，否则从首页入口开始。
       event.preventDefault();
       // 侧栏入口每次都开新会话；旧会话留在“最近对话”里。
@@ -556,7 +561,6 @@
         window.PolicyMatch.openHomeIntake();
         render();
         const first=page.querySelector('[data-home-intake] input');
-        first?.closest('.intake-question')?.scrollIntoView?.({block:'nearest'});
         first?.focus({preventScroll:true});
         return;
       }

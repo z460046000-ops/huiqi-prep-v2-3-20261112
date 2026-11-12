@@ -4,7 +4,6 @@
   const S = () => window.PolicyStore;
   const U = () => window.PolicyUI;
   const drafts = new Map();
-  const scrollPositions = new Map();
   const experts = {
     profile: { ...window.PolicyPersonas.get('profile'), subject: '企业档案', icon: 'building', prompts: ['企业档案还缺什么？', '哪些资料已经提供？'], placeholder: '补充企业情况，或问问档案还缺什么……' },
     match: { ...window.PolicyPersonas.get('match'), subject: '政策匹配', icon: 'search', prompts: ['为什么匹配这个政策？', '申报条件是什么？'], placeholder: '问问匹配原因、政策条件或适用范围……' },
@@ -63,9 +62,51 @@
     const workId = validWork(requestedWork);
     if (message && checkScope) {
       const reply = scopeReply(workId, message);
-      if (reply) return reply;
+      const policyQuestion = hasPolicy(task) && ['guidance', 'assembly'].includes(workId) && (/截止|什么时候|期限|来得及|还剩|齐|缺|还差|哪些材料|要什么材料/.test(message) || workId === 'guidance' && /去哪|在哪|怎么提交|如何提交|渠道|网址|邮箱|系统|怎么办理/.test(message));
+      if (reply && !(policyQuestion && reply.startsWith('抱歉，这个问题我回答不了。'))) return reply;
     }
     const policy = policyFor(task);
+    if (hasPolicy(task) && policy && ['guidance', 'assembly'].includes(workId)) {
+      const publicPolicy = window.PolicyPublicPolicies?.find(item => item.id === task.policyId) || policy;
+      const application = policy.application || {}, submit = application.submit;
+      const { statusOf, daysLeft, windowText, confOf } = window.PolicyMatch;
+      const title = policy.title, sourceUrl = policy.sourceUrl || publicPolicy.sourceUrl || '';
+      const materials = task.requirements.filter(item => item.kind === 'material');
+      const required = materials.filter(item => item.required !== false);
+      if (/截止|什么时候|期限|来得及|还剩/.test(message)) {
+        if (publicPolicy.category === '常态办理') return `「${title}」按纳税期常态办理，没有统一的申报截止时间。`;
+        const confidence = confOf(publicPolicy, 'applicationEnd');
+        const left = statusOf(publicPolicy) === 'open' && confidence !== 'low' ? `，还剩 ${daysLeft(publicPolicy)} 天` : '';
+        const note = policy.applicationTimeNote || publicPolicy.applicationTimeNote;
+        return [`「${title}」申报截止：${submit?.deadline || windowText(publicPolicy)}${left}。`, note, ['mid', 'low'].includes(confidence) ? `截止时间以原文为准：${sourceUrl}` : ''].filter(Boolean).join('\n');
+      }
+      if (workId === 'guidance' && /去哪|在哪|怎么提交|如何提交|渠道|网址|邮箱|系统|怎么办理/.test(message)) {
+        const lines = [];
+        if (confOf(publicPolicy, 'submitUrl') === 'low') lines.push(`「${title}」的办理入口还没核实，请先看政策原文写明的渠道：${sourceUrl}`);
+        else if (submit) {
+          lines.push(submit.email ? `「${title}」通过邮件报送：${submit.email}。` : `「${title}」在${submit.name}办理：${submit.url}。`);
+          lines.push(...(submit.steps || []).map((step, index) => `${index + 1}. ${step}`));
+          if (submit.contact) lines.push(`咨询：${submit.contact}`);
+        } else lines.push(`请按政策原文写明的渠道办理：${sourceUrl}`);
+        return [...lines, '提交要您本人完成，平台不代为提交。'].join('\n');
+      }
+      if (/齐|缺|还差|哪些材料|要什么材料/.test(message)) {
+        const ready = required.filter(item => item.status === 'ready'), missing = required.filter(item => item.status !== 'ready');
+        const optional = materials.filter(item => item.required === false);
+        const lines = [`必需材料 ${required.length} 项，已准备 ${ready.length} 项。${missing.length ? '' : '必需材料都齐了。'}`];
+        if (ready.length) lines.push(`已准备：${ready.map(item => item.label).join('、')}`);
+        if (missing.length) lines.push(`还缺：${missing.map(item => `${item.label}${item.evidence || item.note ? `（${item.evidence || item.note}）` : ''}`).join('、')}`);
+        if (optional.length) lines.push(`选填：${optional.map(item => item.label).join('、')}`);
+        return lines.join('\n');
+      }
+      if (workId === 'assembly' && /怎么写|写什么|写哪些/.test(message) && !/润色/.test(message)) {
+        const template = !application.noTemplate && application.templates?.[0];
+        return [template ? `按官方模板《${template.label}》逐项填写。` : '这项政策没有官方模板，按材料清单准备。', ...required.map(item => {
+          const spec = application.checklist?.find(entry => item.sourceId === `${task.policyId}-${entry.id}` || item.label === entry.label);
+          return `${item.label}：${spec?.note || item.note || item.evidence || ''}${spec?.expects?.length ? `；预审会检查是否写到：${spec.expects.join('、')}` : ''}`;
+        })].join('\n');
+      }
+    }
     const versions = versionsFor(task);
     const latest = versions[0];
     const gaps = incomplete(task);
@@ -157,6 +198,10 @@
   }
 
   /* 材料卡：申报材料和办理指引的核对卡共用。上传完整文件，或批量传零散资料由 AI 生成；有文件后可重新上传、删除。 */
+  function uploadRow({ inputAttrs, title, hint, generate = '' }) {
+    const E = U().escape, I = U().icon;
+    return `<div class="upload-row"><label class="upload-main"><span class="upload-icon" aria-hidden="true">${I('upload')}</span><span class="upload-text"><b>${E(title)}</b><small>${E(hint)}</small></span><input type="file" ${inputAttrs}></label>${generate ? `<span class="upload-alt"><span>只有零散资料？</span>${generate}</span>` : ''}</div>`;
+  }
   function materialCard(task,item,compact=false,label=''){
     const E=U().escape,I=U().icon;
     // 照片、视频（库表 media: true）只能上传，不提供 AI 生成。
@@ -173,26 +218,28 @@
       const note=!ready?window.PolicyMatch?.applicationNote(task,item)||'':'';
       const state=count?['is-busy','生成中']:generated?['is-done','AI 已生成']:ready?['is-done','已上传']:item.required===false?['','选填']:['','待准备'];
       const head=`<header class="prep-card-head"><span class="prep-card-icon" aria-hidden="true">${I('file')}</span><h4><button type="button" class="prep-card-open" data-action="material-review" ${attrs}>${E(label)}${E(item.label)}</button></h4><span class="prep-state ${state[0]}">${state[0]==='is-done'?I('check'):''}${state[1]}</span></header>`;
-      const generate=label=>`<label class="prep-alt-link">${I('spark')}<span>${label}</span><input type="file" multiple data-source-generate ${attrs} accept="${accept}" aria-label="批量选择零散资料，AI 生成${E(item.label)}"></label>`;
+      const generate=label=>`<label class="prep-alt-link"><span>${label}</span>${I('chevron')}<input type="file" multiple data-source-generate ${attrs} accept="${accept}" aria-label="批量选择零散资料，AI 生成${E(item.label)}"></label>`;
       let body='';
       if(count)body=`<div class="prep-busy" role="status"><span class="prep-spinner" aria-hidden="true"></span><div><strong>AI 正在生成《${E(item.label)}》</strong><small>正在从 ${count} 份资料里提取内容</small></div></div>`;
       else if(ready){
         const fileName=source.fileName||`${item.label}.doc`;
         body=`<div class="prep-file"><span class="prep-file-icon" aria-hidden="true">${I('file')}</span><div class="prep-file-text"><strong title="${E(fileName)}">${E(fileName)}</strong></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div><div class="prep-advice"><div class="prep-advice-head"><span class="prep-advice-mark" aria-hidden="true">${I('spark')}</span><b>AI 建议</b><button type="button" class="text-button prep-advice-view" data-action="material-review" ${attrs}>查看 ${I('chevron')}</button></div><p>${E(window.PolicyMatch?.materialAdvice(task,source)||'')}</p></div>`;
-      }else if(compact)body=`<div class="prep-compact-actions"><label class="prep-compact-upload">上传文件<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"></label>${uploadOnly?'':generate('AI 生成')}</div>`;
-      else body=`<label class="prep-drop"><span class="prep-drop-icon" aria-hidden="true">${I('upload')}</span><span class="prep-drop-title"><b>上传完整文件</b><small>${media?'图片、视频':'Word、PDF、图片'}</small></span><input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"></label>${uploadOnly?'':`<div class="prep-alt"><span>只有零散资料？</span>${generate('批量上传，AI 生成')}${I('chevron')}</div>`}`;
+      }else body=uploadRow({ inputAttrs: `data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"`, title: '上传文件', hint: media ? '图片、视频' : 'Word、PDF、图片', generate: uploadOnly ? '' : generate('AI 生成') });
       return `<article class="prep-card${ready?' is-ready':''}${compact&&!ready&&!count?' is-compact':''}" data-status="${E(item.status)}">${head}${note?`<p class="prep-card-note">${E(note)}</p>`:''}${body}</article>`;
   }
   /* 政策申报辅助：每份材料一张卡。两条路得到同一份文件：上传完整文件，或批量传零散资料由 AI 生成。 */
+  /* 材料卡片外层（卡头 + 进度 + 必需/选填分组）：申报材料和办理指引的核对卡共用。after(item) 返回追加在该项卡片后的内容。 */
+  function prepSections(task,{required=[],optional=[],after=null}={}){
+    const done=required.filter(item=>item.status==='ready').length;
+    const percent=required.length?Math.round(done/required.length*100):0;
+    const card=(item,compact,label)=>{const html=materialCard(task,item,compact,label);const extra=after?after(item)||'':'';return extra?`<div class="check-material">${html}${extra}</div>`:html;};
+    return `<header class="prep-head"><div class="prep-head-text">${window.PolicyMatch?.applicationIntro(task)||''}</div><div class="prep-progress"><strong>已准备 ${done} / ${required.length} 项</strong><span class="prep-progress-track" role="progressbar" aria-valuenow="${done}" aria-valuemax="${required.length}" aria-label="已准备 ${done}/${required.length} 项"><i style="width:${percent}%"></i></span></div></header><div class="prep-grid">${required.map((item,index)=>card(item,false,`材料 ${index+1}：`)).join('')}</div>${optional.length?`<h4 class="prep-subhead">选填材料</h4><div class="prep-stack">${optional.map((item,index)=>card(item,true,`选填 ${index+1}：`)).join('')}</div>`:''}`;
+  }
   function prepMarkup(task,lead='') {
-    const E=U().escape,I=U().icon,expert=experts.assembly;
+    const E=U().escape,expert=experts.assembly;
     const materials=task.requirements.filter(item=>item.kind==='material'&&item.required!==false);
     const optional=task.requirements.filter(item=>item.kind==='material'&&item.required===false);
-    const done=materials.filter(item=>item.status==='ready').length;
-    const accept='.doc,.docx,.txt,.md,.htm,.html,.pdf,.jpg,.jpeg,.png';
-    const card=(item,compact=false,label='')=>materialCard(task,item,compact,label);
-    const percent=materials.length?Math.round(done/materials.length*100):0;
-    return `<div class="chat-message-row is-assistant chat-prep-row"><span class="chat-message-avatar chat-message-expert-avatar" aria-hidden="true" style="--portrait-x:${expert.x}%;--portrait-y:${expert.y}%"></span><div class="chat-message-body"><span class="chat-message-name">${E(expert.name)}</span><div class="chat-message chat-assistant chat-confirmation-bubble prep-bubble" role="group" aria-label="申报材料进度">${lead}<header class="prep-head"><div class="prep-head-text">${window.PolicyMatch?.applicationIntro(task)||''}</div><div class="prep-progress"><strong>已准备 ${done} / ${materials.length} 项</strong><span class="prep-progress-track" role="progressbar" aria-valuenow="${done}" aria-valuemax="${materials.length}" aria-label="已准备 ${done}/${materials.length} 项"><i style="width:${percent}%"></i></span></div></header><div class="prep-grid">${materials.map((item,index)=>card(item,false,`材料 ${index+1}：`)).join('')}</div>${optional.length?`<h4 class="prep-subhead">选填材料</h4><div class="prep-stack">${optional.map((item,index)=>card(item,true,`选填 ${index+1}：`)).join('')}</div>`:''}</div></div></div>`;
+    return `<div class="chat-message-row is-assistant chat-prep-row"><span class="chat-message-avatar chat-message-expert-avatar" aria-hidden="true" style="--portrait-x:${expert.x}%;--portrait-y:${expert.y}%"></span><div class="chat-message-body"><span class="chat-message-name">${E(expert.name)}</span><div class="chat-message chat-assistant chat-confirmation-bubble prep-bubble" role="group" aria-label="申报材料进度">${lead}${prepSections(task,{required:materials,optional})}</div></div></div>`;
   }
 
   function confirmationMarkup(task, workId) {
@@ -210,9 +257,20 @@
       actions.push({action:'intake-edit',label:reasons.length?'补充资料':'修改企业信息'});
       if(!task.steps.profile)actions.push({action:'load-demo',label:'载入示例企业资料'});
     }else if(workId==='match'&&policy?.public&&task.steps.match){
-      // 点申报就算选定，不再确认。这里只提示接着去准备材料。
-      title=`正在申报「${policy.title}」`;description='接着上传材料就行。';skipConfirm=true;
-      actions.push({route:'task',work:'assembly',label:'去上传材料'});
+      const requiredMaterials=task.requirements.filter(item=>item.kind==='material'&&item.required!==false);
+      const prepared=requiredMaterials.filter(item=>item.status==='ready').length;
+      if(latest?.status==='confirmed'){
+        title=`「${policy.title}」的材料 V${latest.number} 已确认`;description='接下来去办理提交。';
+        actions.push({route:'task',work:'guidance',label:'去办理提交'});
+      }else if(requiredMaterials.length&&prepared===requiredMaterials.length){
+        // 必需材料都传好了，只差确认版本。
+        title=`正在申报「${policy.title}」`;description=`${requiredMaterials.length} 项必需材料已备齐，查看并确认材料版本后就能去办理提交。`;
+        actions.push({route:'task',work:'assembly',label:'去确认材料'});
+      }else{
+        title=`正在申报「${policy.title}」`;description=`已准备 ${prepared}/${requiredMaterials.length} 项必需材料，接着准备材料。`;
+        actions.push({route:'task',work:'assembly',label:'去准备材料'});
+      }
+      skipConfirm=true;
     }else if(workId==='match'){
       title='确认本次申报项目';description='请核对政策方向和适用条件，确定本次要准备的项目。';confirmLabel='确认这个项目，继续诊断';
       facts.push(['拟申报政策',policy?.title||'尚未选择'],['政策地区',policy?.region||'待核对']);
@@ -223,7 +281,7 @@
       title=`已具备 ${counts.ready}/${task.requirements.length} 项`;
       description=left?`按这项政策，还差 ${left} 项必须补。可以现在补，也可以先去组稿，缺的内容会标成待补。`:'必须的资料都齐了，正文和有效性仍需人工核对。';
       confirmLabel=left?'先去组稿，缺的之后补':'继续组稿';
-
+      
       if(!task.steps.match)actions.push({route:'task',work:'match',label:'去选政策'});
     }else{
       const sources=new Set((latest?.sections||[]).flatMap(section=>section.sourceIds));
@@ -311,48 +369,61 @@
     </section>`;
   }
 
-  function captureView() {
-    const panel = document.querySelector('.adviser-card[data-chat-task]');
-    if (!panel || !S().getTask(panel.dataset.chatTask)) return false;
-    const key = keyFor(panel.dataset.chatTask, validWork(panel.dataset.chatWork));
-    const region = panel.querySelector(':scope > .chat-scroll-region');
-    const input = panel.querySelector('#adviser-message');
-    if (region) scrollPositions.set(key, region.scrollTop);
-    if (input) drafts.set(key, input.value.slice(0, 2000));
-    return true;
+  // 任务、未建任务的选政策对话和首页表单共用同一套定位规则。
+  function chatView() {
+    const page = document.querySelector('#page-content');
+    const region = page?.querySelector('.chat-scroll-region');
+    const home = page?.querySelector('.start-hero');
+    const rows = region
+      ? [...region.querySelector('.chat-messages').querySelectorAll('.chat-message-row, .chat-prep-row')]
+      : [...(home?.querySelectorAll('[data-home-intake]') || [])];
+    return { page, region, home, rows };
   }
 
-  function restoreView({ followLatest = false } = {}) {
-    const panel = document.querySelector('.adviser-card[data-chat-task]');
-    if (!panel) return false;
-    const key = keyFor(panel.dataset.chatTask, validWork(panel.dataset.chatWork));
-    const region = panel.querySelector(':scope > .chat-scroll-region');
-    const input = panel.querySelector('#adviser-message');
+  function captureView() {
+    const { page, region, rows } = chatView();
+    const panel = page?.querySelector('.adviser-card[data-chat-task]');
+    const input = panel?.querySelector('#adviser-message');
+    if (input) drafts.set(keyFor(panel.dataset.chatTask, validWork(panel.dataset.chatWork)), input.value.slice(0, 2000));
+    return { documentKey: page?.dataset.chatDocumentKey, rowCount: rows.length, top: region ? region.scrollTop : window.scrollY };
+  }
+
+  function restoreView({ previous, followLatest = false } = {}) {
+    const { page, region, home, rows } = chatView();
+    const panel = page?.querySelector('.adviser-card[data-chat-task]');
+    const input = panel?.querySelector('#adviser-message');
+    const key = panel && keyFor(panel.dataset.chatTask, validWork(panel.dataset.chatWork));
     if (input && drafts.has(key)) input.value = drafts.get(key);
-    if (region) {
-      const hasPosition = scrollPositions.has(key);
-      let top = followLatest || !hasPosition ? region.scrollHeight : scrollPositions.get(key);
-      if (region.clientHeight > 0 && (followLatest || !hasPosition)) {
-        const regionBounds = region.getBoundingClientRect();
-        if (followLatest) {
-          const reply = [...region.querySelectorAll(':scope > .chat-messages > .chat-message-row.is-assistant')]
-            .filter(row => row.querySelector('p.chat-assistant:not(.chat-context)')).at(-1);
-          const replyBounds = reply?.getBoundingClientRect();
-          if (replyBounds?.height > 0) top = region.scrollTop + replyBounds.bottom - regionBounds.top - region.clientHeight + 10;
-        } else {
-          const confirmation = region.querySelector(':scope > .chat-messages > .chat-confirmation-row, :scope > .chat-messages > .chat-prep-row');
-          const confirmationBounds = confirmation?.getBoundingClientRect();
-          if (confirmationBounds?.height > region.clientHeight) top = region.scrollTop + confirmationBounds.top - regionBounds.top - 10;
-        }
-        // 资料卡片从头开始看，不直接滚到卡片底部。
-        const intakeRow = [...region.querySelectorAll('.intake-body')].at(-1)?.closest('.chat-message-row');
-        const intakeBounds = intakeRow?.getBoundingClientRect();
-        if (intakeBounds?.height > 0) top = region.scrollTop + intakeBounds.top - regionBounds.top - 10;
-        top = Math.max(0, Math.min(top, region.scrollHeight - region.clientHeight));
-      }
-      region.scrollTop = top;
-      scrollPositions.set(key, region.scrollTop);
+    if (!region && !home) return false;
+    const same = previous?.documentKey === page.dataset.chatDocumentKey;
+    const scroller = region || window;
+    // innerHTML 会重建滚动容器；先恢复原位置，原地更新到这里就结束。
+    if (previous && same) scroller.scrollTo({ top: previous.top, behavior: 'instant' });
+    if (!followLatest && same && rows.length <= previous.rowCount) return true;
+    if (!rows.length) return true;
+    const enteringAnotherConversation = !same;
+    const workId = panel?.dataset.chatWork;
+    const height = region ? region.clientHeight : window.innerHeight;
+    const viewportTop = region ? region.getBoundingClientRect().top + region.clientTop : 0;
+    const currentTop = region ? region.scrollTop : window.scrollY;
+    const maxTop = region ? region.scrollHeight - height : document.documentElement.scrollHeight - height;
+    let anchor = null;
+    if (enteringAnotherConversation && workId === 'assembly') anchor = region.querySelector('.chat-prep-row');
+    if (enteringAnotherConversation && workId === 'guidance') anchor = region.querySelector('.check-card')?.closest('.chat-message-row');
+    if (anchor) {
+      const bounds = anchor.getBoundingClientRect();
+      const top = currentTop + bounds.top - viewportTop - 12;
+      scroller.scrollTo({ top: Math.max(0, Math.min(top, maxTop)), behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      return true;
     }
+    const first = rows[same ? previous.rowCount : rows.length - 1];
+    const lastBounds = rows.at(-1).getBoundingClientRect();
+    const firstBounds = first?.getBoundingClientRect();
+    // 超高新增内容从第一行开始读；动画阶段只跟随底部。
+    const top = !followLatest && firstBounds && lastBounds.bottom - firstBounds.top > height
+      ? currentTop + firstBounds.top - viewportTop - 12
+      : region ? maxTop : currentTop + lastBounds.bottom - height + 12;
+    scroller.scrollTo({ top: Math.max(0, Math.min(top, maxTop)), behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
     return true;
   }
 
@@ -368,7 +439,6 @@
     if (input?.closest('form')?.dataset.task === task.id && validWork(input.closest('form').dataset.work) === workId) input.value = '';
     drafts.delete(keyFor(task.id, workId));
     U().refresh();
-    restoreView({ followLatest: true });
     document.querySelector('#adviser-message')?.focus({ preventScroll: true });
   }
   document.addEventListener('input', event => {
@@ -385,9 +455,9 @@
     event.preventDefault();
     event.target.form?.requestSubmit();
   });
-  window.PolicyChat = Object.freeze({ materialCard, render, captureView, restoreView, answerFor: answer,
+  window.PolicyChat = Object.freeze({ uploadRow, materialCard, prepSections, render, captureView, restoreView, answerFor: answer,
     forgetTask(taskId) {
-      for (const map of [drafts,scrollPositions]) {
+      for (const map of [drafts]) {
         for (const key of map.keys()) if(key.startsWith(`${taskId}:`)) map.delete(key);
       }
     },

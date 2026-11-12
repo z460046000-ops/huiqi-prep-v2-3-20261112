@@ -503,6 +503,7 @@
 .nohit-chip{min-height:30px;padding:0 10px;border:1px solid #dce3ed;border-radius:10px;background:#fff;font-size:12px;color:#445267;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
 .nohit-chip:hover{border-color:#88a9df}
 .nohit-chip[aria-pressed="true"]{border-color:#88a9df;background:#e7effc;color:#294574;font-weight:600}
+.nohit-chip:disabled{cursor:default}.nohit-chip:disabled:hover{border-color:#88a9df}
 .nohit-chip:focus-visible{outline:2px solid #83adff;outline-offset:1px}
 .nohit-confirm{display:flex;justify-content:flex-end}
 .match-nohit .nohit-confirm .button{min-height:34px;padding:0 18px;border-radius:8px;box-shadow:none;font-size:12px;font-weight:600}
@@ -611,3 +612,5 @@
 .conf-tag{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;font-size:11px;font-style:normal;font-weight:600;line-height:1.7;vertical-align:1px}
 .conf-tag.is-mid{background:#eef4ff;color:#28508f}
 .conf-tag.is-low{background:#fff3df;color:#b45309}
+
+.match-only-open{flex:none;white-space:nowrap}
