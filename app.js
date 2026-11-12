@@ -233,8 +233,7 @@
     sidebar();
     B.syncSelection();
     window.PolicyHomeFeed?.mount();
-    const title = page.querySelector('h1')?.textContent || '惠企政策平台';
-    document.title = `${title} · 惠企政策平台`;
+    document.title = '惠企政策智能体V2.3';
     window.PolicyChat.restoreView();
     restoreFormDraft();
     const documentContent=page.querySelector('.workspace-content');
