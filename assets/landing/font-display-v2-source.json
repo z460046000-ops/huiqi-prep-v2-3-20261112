@@ -1,0 +1,66 @@
+{
+  "family": "Noto Serif SC",
+  "weight": 600,
+  "format": "woff2",
+  "style": "normal",
+  "variable": false,
+  "sourceRepository": "https://github.com/google/fonts/tree/main/ofl/notoserifsc",
+  "sourceCommit": "8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5",
+  "sourceFontUrl": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notoserifsc/NotoSerifSC%5Bwght%5D.ttf",
+  "sourceFontSha256": "050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9",
+  "license": "SIL Open Font License 1.1",
+  "licenseUrl": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notoserifsc/OFL.txt",
+  "licenseSha256": "5e0da210fb04058a8c0087985d2d456b931c2579811a49655721d3cf0c36b6d6",
+  "localLicense": "font-license.txt",
+  "outputFile": "policy-serif-display-v2.woff2",
+  "outputSha256": "09b48eb12e42fea3e3410b1a53f16224767ff0994156faf44cffd6a2c75a3722",
+  "outputBytes": 739216,
+  "coverage": {
+    "currentHeadingCount": 16,
+    "currentHeadingUniqueCharacters": 91,
+    "currentHeadingsMissing": [],
+    "cmapCharacters": 3893,
+    "commonCjkSet": "GB2312 level 1, B0A1-D7FE valid characters",
+    "commonCjkCharacters": 3755,
+    "includes": "Current display headings, 3755 common Chinese characters, ASCII U+0020-U+007E, Chinese punctuation and full-width digits"
+  },
+  "previousFont": {
+    "file": "policy-serif.woff2",
+    "sha256": "7304080e95ebec0c046a9c8a689174826c0cf6ad2bf6bc3fb1bf035dc09b1c81",
+    "cmapCharacters": 477,
+    "missingCurrentHeadingCharacters": [
+      "见",
+      "，"
+    ],
+    "missingCodepoints": [
+      "U+89C1",
+      "U+FF0C"
+    ],
+    "cause": "Original text-only subset omitted glyphs; omitted characters fall back to another font."
+  },
+  "headingsAtBuild": [
+    "找到合适的政策，备齐申报材料。",
+    "企业研发申报",
+    "找到你的行业，看见政策机会。",
+    "遇到哪一步，就找哪方面的帮助。",
+    "先把企业情况理清楚",
+    "找到值得进一步核对的政策",
+    "把申报条件讲明白",
+    "还差什么，先补什么",
+    "把已有资料整理进模板",
+    "提交前，再逐项核对",
+    "企业政策体检团",
+    "申报材料准备团",
+    "一句申报目标，变成具体的下一步。",
+    "每一步，都有依据可查。",
+    "企业获得的支持，看得见。",
+    "下一项申报，从你的企业开始。"
+  ],
+  "build": {
+    "fontTools": "4.68.0",
+    "brotli": "1.2.1",
+    "method": "Subset complete official variable font, instantiate wght=600, write WOFF2; no single unicode-range fragment used.",
+    "verification": "node verify-font.mjs; FONTTOOLS_PYTHON can point to a Python environment with fonttools and brotli.",
+    "visualInspection": false
+  }
+}

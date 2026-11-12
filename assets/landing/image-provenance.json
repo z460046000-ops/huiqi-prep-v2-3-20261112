@@ -1,0 +1,28 @@
+{
+  "prompt": "Use case: photorealistic-fictional-personas. Asset type: one professional photography contact sheet used as a CSS sprite atlas for a Chinese enterprise policy platform. Create ONE precisely aligned 3-column by 2-row contact sheet, six equally sized SQUARE cells, no gutters, 1536x1024 landscape overall. Each cell is a separate photorealistic waist-up studio portrait of a DIFFERENT entirely fictional Chinese professional policy adviser. Keep full head, shoulders, torso and hands inside each square with generous breathing room. Subject centered, looking warmly and confidently at camera, natural human skin texture, editorial portrait photography, not cartoons or 3D avatars. All six cells use the exact same flat very pale cool blue background #eef3fa and soft realistic daylight. Top row left: Chinese woman age 35, shoulder-length black hair, ivory blouse and charcoal blazer, holds closed neutral paper folder; top middle: Chinese man age 42, short black hair, dark navy jacket over white shirt, open relaxed posture; top right: Chinese woman age 45, short neat black hair, pale stone blazer over white blouse, thin subtle glasses. Bottom left: Chinese man age 36 with subtle thin spectacles, graphite business jacket, naturally folded hands; bottom middle: Chinese woman age 30 with tied back black hair, slate blazer, holds a plain white paper folder; bottom right: Chinese man age 50 with slightly greying hair, navy suit, friendly reserved expression. Quiet premium contemporary business portraiture, precise clothing seams, soft natural shadows, believable anatomy. All six same portrait scale and studio lighting. No text, labels, frames, borders, symbols, badges, logos, watermarks, gradients, or background scenery. They are fictional visual personas, not real credentialed experts.",
+  "source": "/Users/zhangzhengao/.codex/generated_images/01a18653-670c-7c82-8077-2ae30737d22c/exec-74ca6bd3-91c6-43fc-9566-a2ef360c48f1.png",
+  "output": "assets/landing/policy-advisers.webp",
+  "fictional": true,
+  "tool": "image_gen.imagegen",
+  "formatConversion": "Sharp WebP quality 88; no subject edits or generated UI text",
+  "usage": "3 by 2 atlas, CSS background positioning",
+  "cutout": {
+    "source": "/Users/zhangzhengao/.codex/generated_images/01a18653-670c-7c82-8077-2ae30737d22c/exec-e1ed3708-5bb7-4f20-b2a0-168281dfb6a0.png",
+    "output": "assets/landing/policy-advisers-cutout.webp",
+    "fictional": true,
+    "tool": "image_gen.imagegen",
+    "operation": "背景透明编辑，保留原有3列2行排布与完整人物头部",
+    "formatConversion": "Sharp WebP quality 90, alphaQuality 100; no resizing, cropping or subject edits",
+    "usage": "Transparent 3 by 2 atlas for expert and team cards",
+    "alphaVerification": {
+      "width": 1536,
+      "height": 1024,
+      "hasAlpha": true,
+      "alphaMin": 0,
+      "alphaMax": 254,
+      "transparentPixels": 776935,
+      "partialAlphaPixels": 795929,
+      "totalPixels": 1572864
+    }
+  }
+}
