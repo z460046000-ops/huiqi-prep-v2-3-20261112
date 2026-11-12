@@ -230,7 +230,7 @@
     const downloads = (app?.templates || []).filter(item => /\.(zip|docx?|pdf)(?:[?#]|$)/i.test(item.url));
     // 模板不在原文附件里时（比如要在官方系统里下载），按库表里的说明提示去哪里取。
     const missing = app?.templateStatus === 'missing' ? `<p class="template-missing">这项政策有申报模板，但暂未收录。${app.templateWhere ? esc(app.templateWhere) : `可以从${source}的附件下载`}后上传，上传后照常整理材料。</p>` : '';
-    return `<div class="chat-gap-templates">${missing}<p>${app ? `根据${source}，需要准备以下资料：` : `${source}未列出具体材料清单，以下为常用资料，待按原文核对。`}</p>${downloads.map(item => `<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.label)}</a>`).join('')}</div>`;
+    return `<div class="chat-gap-templates">${missing}<p>${app ? `根据${source}，需要准备以下材料：` : `${source}未列出具体材料清单，以下为常用资料，待按原文核对。`}</p>${downloads.length ? '官方模板：' : ''}${downloads.map(item => `<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.label)}</a>`).join('、')}</div>`;
   }
 
   /* 官方系统相关的说明和指南链接，都放在提交抽屉里。 */
@@ -1386,7 +1386,8 @@
     const facts = factsOf(task);
     const regionHint = !facts.region || facts.region === '其他地区' ? `<p class="match-partial">补充所在地区，能看到地方政策。<button type="button" class="text-button" data-action="portrait-edit" data-task="${esc(task.id)}">补充企业信息</button></p>` : '';
     const card = `<div class="intake-card match-result${onlyOpen ? ' only-open' : ''}">${(notFoundNotice(task) + regionHint) || partial}<div class="match-result-bar"><p id="match-result-heading" class="match-result-heading" tabindex="-1">有 ${openCount} 项政策正在申报</p>${onlyOpenToggle()}</div>${typeFilter(matches)}<div class="match-policy-grid">${cards}</div>${diagnosisCard(task)}</div>`;
-    return assistantBubble(`「${task.company.name}」比对完了。`, card, 'match') + followupBubble(task, openCount, matches.map(item => item.policy));
+    // 少于 3 条时的追问并进结果卡片底部，一次只回一张卡片。
+    return assistantBubble(`「${task.company.name}」比对完了。`, card + followupBubble(task, openCount, matches.map(item => item.policy), true), 'match');
   }
 
   /* 少于 3 条正在申报时追问一轮（PRD V2.2 8.1.3）：只问还空着的关键字段（地区、行业、企业规模、成立年限、企业类型），
@@ -1418,13 +1419,15 @@
     return policies.flatMap(policy => policyMetrics(task, policy).filter(item => item.interval && item.straddle && !item.unsure)).filter(item => { const k = `${item.key}|${item.need}`; if (seen.has(k)) return false; seen.add(k); return true; });
   }
   const rangeFieldMarkup = item => `<fieldset class="intake-question"><legend>${esc(item.key === 'rd' ? `研发费占比达到 ${item.need}%？` : `营业收入达到 ${item.need} 万？`)}</legend><div class="match-options">${[['yes', '达到了'], ['no', '没达到'], ['unsure', '不确定']].map(([value, label]) => `<label class="match-option"><input type="radio" name="range|${esc(item.key)}|${item.need}" value="${value}"><span>${label}</span></label>`).join('')}</div><small class="range-ask-note">您选的是「${esc(item.pick)}」，跨过了政策要求</small></fieldset>`;
-  function followupBubble(task, openCount, policies = []) {
+  function followupBubble(task, openCount, policies = [], inline = false) {
     if (openCount >= FOLLOWUP_MIN || task.intake?.followupDone) return '';
     const missing = missingKeyFields(task), ranges = rangeAsks(task, policies);
     if (!missing.length && !ranges.length) return '';
     const labels = [...missing.map(key => ({ region: '所在地区', industry: '所属行业', type: '企业类型' }[key] || keyFieldOptions[key].label)), ...ranges.map(item => item.key === 'rd' ? '研发费占比' : '营业收入')];
     const id = esc(task.id);
-    return assistantBubble(`正在申报的政策只有 ${openCount} 项。补充${[...new Set(labels)].join('、')}，可能找到更多适合的政策。`, `<div class="intake-card intake-followup" data-task="${id}">${missing.map(key => keyFieldMarkup(key, answersOf(task))).join('')}${ranges.map(rangeFieldMarkup).join('')}<div class="intake-foot is-end"><button type="button" class="button button-secondary" data-action="followup-skip" data-task="${id}">跳过</button><button type="button" class="button button-primary" data-action="followup-submit" data-task="${id}">补充后重新匹配</button></div></div>`, 'match');
+    const ask = `正在申报的政策只有 ${openCount} 项。补充${[...new Set(labels)].join('、')}，可能找到更多适合的政策。`;
+    const body = `<div class="intake-card intake-followup" data-task="${id}">${missing.map(key => keyFieldMarkup(key, answersOf(task))).join('')}${ranges.map(rangeFieldMarkup).join('')}<div class="intake-foot is-end"><button type="button" class="button button-secondary" data-action="followup-skip" data-task="${id}">跳过</button><button type="button" class="button button-primary" data-action="followup-submit" data-task="${id}">补充后重新匹配</button></div></div>`;
+    return inline ? `<div class="followup-inline"><p class="followup-ask">${esc(ask)}</p>${body}</div>` : assistantBubble(ask, body, 'match');
   }
 
   /* 从申报辅助进来还没选政策：列出正在申报的政策，选好后才知道要备哪些材料。 */
@@ -1478,7 +1481,10 @@
     if (!task?.intake) return '';
     // 企业信息在这里收集，收完接着比对。
     if (task.intake.stage !== 'ready') return intakeMarkup(task);
-    return `<div id="match-app" class="match-app">${chatInner(task)}</div>`;
+    // 匹配开始后，前面的问答（选几项、核对画像、确认）留在对话里，保证一问一答。
+    const known = portraitRows(task).filter(([, value]) => value).length;
+    const before = `${assistantBubble(`想帮「${task.company.name}」匹配政策，先了解几项情况，点选就行。`)}${userBubble(answersSummary(answersOf(task)))}${assistantBubble('请核对企业画像，确认后开始匹配。', `<div class="intake-card intake-done"><p>企业画像已了解 ${known}/${PORTRAIT_LABELS.length} 项，右侧可以查看和补充。</p></div>`)}${userBubble('确认企业信息，开始匹配')}`;
+    return `${before}<div id="match-app" class="match-app">${chatInner(task)}</div>`;
   }
 
   const matchPending = task => Boolean(task?.intake) && !task.steps.match;
@@ -1545,7 +1551,7 @@
 
   function handleClick(target) {
     const { action } = target.dataset;
-    if (!['pick-suggest','guidance-prep','check-assign','policy-pick','policy-company-skip','policy-check-confirm','followup-submit','followup-skip','range-answer','copy-official','guidance-service','intake-confirm','service-dismiss','interpret-services-refresh','interpret-todo', 'interpret-apply', 'portrait-edit', 'portrait-cancel', 'portrait-save', 'home-intake-finish', 'intake-edit', 'intake-start', 'intake-remove-file', 'intake-result', 'match-chat', 'match-apply', 'match-drawer', 'match-drawer-close', 'nohit-pick', 'nohit-confirm', 'nohit-service', 'company-retry', 'interpret-retry'].includes(action)) return false;
+    if (!['pick-suggest','guidance-prep','check-assign','policy-pick','policy-company-skip','policy-check-confirm','followup-submit','followup-skip','range-answer','copy-official','guidance-service','intake-confirm','service-dismiss','interpret-services-refresh','interpret-todo', 'interpret-apply', 'portrait-edit', 'portrait-cancel', 'portrait-save', 'home-intake-finish', 'intake-edit', 'intake-start', 'intake-remove-file', 'intake-result', 'match-chat', 'match-apply', 'match-drawer', 'match-drawer-close', 'nohit-pick', 'nohit-confirm', 'nohit-service', 'company-retry', 'interpret-retry', 'guidance-open'].includes(action)) return false;
     if (action === 'policy-pick') {
       pick.policyId = target.dataset.policy;
       window.PolicyUI.refresh();
@@ -1559,8 +1565,15 @@
     }
     if (action === 'policy-company-skip') { startFromPick(''); return true; }
     // V2.3：办理提交里要补材料时，不跳到别的步骤，在当前会话里弹出材料收集卡片，就地上传和解析。
+    if (action === 'guidance-open') {
+      pushGuideStep(target.dataset.task, 'guide');
+      window.PolicyUI.refresh();
+      requestAnimationFrame(() => [...document.querySelectorAll('.chat-message-row')].at(-1)?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }));
+      return true;
+    }
     if (action === 'guidance-prep') {
       prepOpenTasks.add(target.dataset.task);
+      pushGuideStep(target.dataset.task, 'prep');
       window.PolicyUI.refresh();
       requestAnimationFrame(() => document.querySelector('.chat-prep-row')?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }));
       return true;
@@ -1917,7 +1930,7 @@
     if (!policy) return '';
     const rows = policyCheckRows(task, policy).map(([label, need, value]) => `<div class="policy-check-row"><span class="policy-check-label">${esc(label)}</span><span class="policy-check-need">${esc(need)}</span><span class="policy-check-have">${value}</span></div>`).join('');
     const head = `<div class="policy-check-row is-head"><span>条件</span><span>政策要求</span><span>企业现状</span></div>`;
-    return userBubble(task.company.name || '先跳过企业名称') + assistantBubble(task.company.name ? '查到了。这项政策要看下面几项，请核对：' : '这项政策要看下面几项，请补充：', `<div class="intake-card policy-check-card" data-task="${esc(task.id)}">${head}${rows}<div class="intake-foot is-end"><button type="button" class="button button-primary" data-action="policy-check-confirm" data-task="${esc(task.id)}">确认，开始准备材料 ${icon('arrow')}</button></div></div>`, 'assembly');
+    return assistantBubble(task.company.name ? '查到了。这项政策要看下面几项，请核对：' : '这项政策要看下面几项，请补充：', `<div class="intake-card policy-check-card" data-task="${esc(task.id)}">${head}${rows}<div class="intake-foot is-end"><button type="button" class="button button-primary" data-action="policy-check-confirm" data-task="${esc(task.id)}">确认，开始准备材料 ${icon('arrow')}</button></div></div>`, 'assembly');
   }
   /* 入口 2 确认后：只给这条政策的匹配度；地区、行业对不上时提示，不拦截。 */
   /* 旧任务：已保存的匹配结果不重算；选定的政策已截止时出提示，材料和版本照常可看、可下载（PRD V2.2 8.1.1）。 */
@@ -1926,7 +1939,7 @@
     if (!policy || statusOf(policy) !== 'closed') return '';
     return assistantBubble('这项政策已截止，本期无法申报。', `<div class="intake-card policy-expired"><p>已准备的材料和版本照常可以查看、下载。</p><a class="text-button" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看政策原文 ${icon('arrow')}</a></div>`, 'guidance');
   }
-  function policyCheckNote(task) {
+  function policyCheckParts(task) {
     if (task.entry !== 'assembly' || task.intake?.stage === 'policy-check') return '';
     const policy = publicPolicies().find(item => item.id === task.policyId);
     if (!policy) return '';
@@ -1938,7 +1951,11 @@
     const pending = result?.pending ? `<p class="policy-check-pending">还有 ${result.pending} 项待补充，补充后匹配度更准。<button type="button" class="text-button" data-action="match-drawer" data-task="${esc(task.id)}" data-policy="${esc(policy.id)}">查看条件对照</button></p>` : '';
     const card = warn || pending || rangeAskInline(task, policy) ? `<div class="intake-card policy-check-result">${warn}${rangeAskInline(task, policy)}${pending}</div>` : '';
     const head = misses.length ? `「${policy.title}」对照完了：匹配度 ${result?.grade || '暂无法判断'}，${misses.length ? '有一项要先核对' : ''}。` : `「${policy.title}」对照完了：匹配度 ${result?.grade || '暂无法判断'}。`;
-    return assistantBubble(`${head}下面按清单准备材料。`, card, 'assembly');
+    return { text: `${head}下面按清单准备材料。`, card };
+  }
+  function policyCheckNote(task) {
+    const parts = policyCheckParts(task);
+    return parts ? assistantBubble(parts.text, parts.card, 'assembly') : '';
   }
 
   /* 入口 3：按清单核对已备好的材料（完整度 + AI 诊断），再看办事指南。 */
@@ -1963,6 +1980,26 @@
   const unmatchedFiles = new Map();
   const prepOpenTasks = new Set();
   const prepOpen = taskId => prepOpenTasks.has(taskId);
+  /* 入口 2、3：选政策、填企业名发生在建任务之前，任务对话开头按顺序还原，保证一问一答。 */
+  function pickTranscript(task, workId) {
+    const work = task?.entry;
+    if (!['assembly', 'guidance'].includes(work) || workId !== work) return '';
+    const policy = publicPolicies().find(item => item.id === task.policyId);
+    if (!policy) return '';
+    const done = work === 'assembly' && task.intake?.stage !== 'policy-check';
+    // 入口 2 确认后，核对条件那张卡片留在对话里（只读），后面接用户的“确认”。
+    const checked = done ? assistantBubble(task.company.name ? '查到了。这项政策要看下面几项，请核对：' : '这项政策要看下面几项，请补充：', `<div class="intake-card policy-check-card is-done"><div class="policy-check-row is-head"><span>条件</span><span>政策要求</span><span>企业现状</span></div>${policyCheckRows(task, policy).map(([label, need, value]) => `<div class="policy-check-row"><span class="policy-check-label">${esc(label)}</span><span class="policy-check-need">${esc(need)}</span><span class="policy-check-have">${value}</span></div>`).join('')}</div>`, 'assembly') + userBubble('确认，开始准备材料') : '';
+    return assistantBubble(PICK_GREETING[work], '', work) + userBubble(policy.title) + companyAsk(work, policy) + userBubble(task.company.name || '先跳过企业名称') + checked;
+  }
+  /* 入口 2 确认后：匹配度写在材料卡片开头，和材料清单是同一张卡片。 */
+  function policyCheckLead(task) {
+    const parts = policyCheckParts(task);
+    return parts ? `<div class="prep-lead"><p>${esc(parts.text)}</p>${parts.card}</div>` : '';
+  }
+  /* 入口 3：核对结果之后，“看办事指南”“去补写”按用户点的先后各出一张卡片。 */
+  const guideOrder = new Map();
+  const guideSteps = taskId => guideOrder.get(taskId) || [];
+  const pushGuideStep = (taskId, step) => { const list = guideSteps(taskId).filter(item => item !== step); guideOrder.set(taskId, [...list, step]); };
   function guidanceCheckMarkup(task) {
     // 找政策进来的任务走原来的“检查申报材料”；整理申报材料、办理指引进来的，在办理提交这一步先核对材料。
     if (!task.entry || task.entry === 'match') return '';
@@ -1974,10 +2011,11 @@
     const uploaded = rows.some(row => row.state !== 'lack');
     const id = esc(task.id);
     // 每一项复用“申报材料”的材料卡（上传完整文件 / 批量上传，AI 生成 / 重新上传 / 删除），核对出的问题写在卡片下面。
-    const list = rows.map(({ item, state, notes }) => {
+    let requiredNumber = 0, optionalNumber = 0;
+    const list = [...required, ...rows.filter(row => !row.required)].map(({ item, state, notes, required: isRequired }) => {
       const sid = `${policy.id}-${item.id}`;
       const req = task.requirements.find(entry => entry.sourceId === sid) || { id: sid, label: item.label, status: state === 'lack' ? 'missing' : 'ready', kind: 'material', sourceId: sid, required: item.required !== false };
-      const card = window.PolicyChat?.materialCard ? window.PolicyChat.materialCard(task, req) : '';
+      const card = window.PolicyChat?.materialCard ? window.PolicyChat.materialCard(task, req, false, isRequired ? `材料 ${++requiredNumber}：` : `选填 ${++optionalNumber}：`) : '';
       const issues = state === 'warn' && notes.length ? `<p class="check-issues"><b>有问题：</b>${esc(notes.join('；'))}<button type="button" class="text-button" data-action="guidance-prep" data-task="${id}">去补写</button></p>` : '';
       return `<div class="check-material">${card}${issues}</div>`;
     }).join('');
@@ -1985,14 +2023,15 @@
     const ok = required.length - lack.length;
     const text = !uploaded
       ? `这项政策要 ${required.length} 项材料：${required.map(row => row.item.label).join('、')}${rows.length > required.length ? `，另有 ${rows.length - required.length} 项选填` : ''}。把准备好的文件传上来，我帮您核对。`
-      : !lack.length && !warn.length ? `核对结果：${required.length} 项必需材料都齐了，没有发现明显问题。可以看下面的办事指南去提交。`
+      : !lack.length && !warn.length ? `核对结果：${required.length} 项必需材料都齐了，没有发现明显问题。点“看办事指南”去提交。`
       : `核对结果：${required.length} 项必需材料已齐 ${ok} 项${lack.length ? `，缺${lack.map(row => row.item.label).join('、')}` : ''}${warn.length ? `；${warn.length} 项有问题` : ''}。`;
     const severe = policyScore(task, policy)?.grade === '低' ? '<p class="precheck-severe">这项政策匹配度为低，建议暂缓申报，先补齐条件。仍可以继续看办事指南。</p>' : '';
     const latest = S().getState().versions.filter(version => version.taskId === task.id && version.status === 'confirmed').sort((a, b) => b.number - a.number)[0];
     const reuse = latest ? `<p class="check-reuse">平台里已有确认的材料 V${latest.number}，直接用它核对，不用再传。</p>` : '';
     const waiting = unmatchedFiles.get(task.id) || [];
     const assign = waiting.length ? `<div class="check-assign"><p>这 ${waiting.length} 个文件没对上清单，选一下分别是哪一项：</p>${waiting.map((file, index) => `<label class="check-assign-row"><span>${esc(file.name)}</span><select data-assign-file="${index}"><option value="">选一项</option>${rows.map(({ item }) => `<option value="${esc(`${policy.id}-${item.id}`)}">${esc(item.label)}</option>`).join('')}<option value="__none">不属于清单，不用核对</option></select></label>`).join('')}<div class="intake-foot is-end"><button type="button" class="button button-primary" data-action="check-assign" data-task="${id}">确定</button></div></div>` : '';
-    return assistantBubble(text, `<div class="intake-card check-card">${reuse}${severe}${assign}${bulk}<div class="prep-list check-prep-list">${list}</div><p class="precheck-note">AI 诊断按政策要求逐项检查，结论不构成官方审核意见</p></div>`, 'guidance');
+    const guideBtn = guideSteps(task.id).includes('guide') ? '' : `<div class="intake-foot is-end"><button type="button" class="button button-primary" data-action="guidance-open" data-task="${id}">看办事指南</button></div>`;
+    return assistantBubble(text, `<div class="intake-card check-card">${reuse}${severe}${assign}${bulk}<div class="prep-list check-prep-list">${list}</div><p class="precheck-note">AI 诊断按政策要求逐项检查，结论不构成官方审核意见</p>${guideBtn}</div>`, 'guidance');
   }
   // 一次传多个：按文件名对应清单项；对不上的提示单独上传。
   function bulkCheckUpload(input) {
@@ -2068,5 +2107,5 @@
   }
   try { syncApplications(); } catch (error) { console.error('材料清单同步失败', error); }
 
-  window.PolicyMatch = Object.freeze({ expiredNotice, pickComposer, prepOpen, policyFirstMarkup, policyCheckMarkup, policyCheckNote, guidanceCheckMarkup, resetPick, stepInfo, apiProfile, portraitRows, PORTRAIT_LABELS, companyNotFound, resetGuest, noTemplateNotice, quickIntakeMarkup, assemblyPicker, refreshMaterialReview, forgetUpload, closeDrawer, handleClick, intakeActive, intakeMarkup, matchChatMarkup, matchPending, openCount, composerAttach, questions, understanding, beginPortrait, portraitLoading, portraitEditing, portraitEditor, scoreText, openMaterialReview, reviewMaterial, materialAdvice, maskedHtml, companyRows, policyMetrics, openHomeIntake, homeIntakeMarkup, rememberUpload, adoptUploads, uploadsMarkup, interpretMarkup, interpretPicking, guestMarkup, guestAsk, finishGuest, applicationIntro, applicationNote, guidanceMarkup, guidanceDetail, policyDetail, versionReview });
+  window.PolicyMatch = Object.freeze({ pickTranscript, policyCheckLead, guideSteps, userBubble, expiredNotice, pickComposer, prepOpen, policyFirstMarkup, policyCheckMarkup, policyCheckNote, guidanceCheckMarkup, resetPick, stepInfo, apiProfile, portraitRows, PORTRAIT_LABELS, companyNotFound, resetGuest, noTemplateNotice, quickIntakeMarkup, assemblyPicker, refreshMaterialReview, forgetUpload, closeDrawer, handleClick, intakeActive, intakeMarkup, matchChatMarkup, matchPending, openCount, composerAttach, questions, understanding, beginPortrait, portraitLoading, portraitEditing, portraitEditor, scoreText, openMaterialReview, reviewMaterial, materialAdvice, maskedHtml, companyRows, policyMetrics, openHomeIntake, homeIntakeMarkup, rememberUpload, adoptUploads, uploadsMarkup, interpretMarkup, interpretPicking, guestMarkup, guestAsk, finishGuest, applicationIntro, applicationNote, guidanceMarkup, guidanceDetail, policyDetail, versionReview });
 })();

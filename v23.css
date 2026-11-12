@@ -210,3 +210,11 @@
 .demo-entry small{font-size:11.5px;color:#9a6a2a;white-space:nowrap}
 .sidebar-projects+.demo-entry{margin-top:auto}
 .scenario-demo-tag{display:inline-block;margin:0 0 8px;padding:2px 8px;border-radius:6px;background:#fff1dc;color:#9a5b14;font-size:12px}
+
+/* 入口 2：匹配度写在材料卡片开头 */
+.prep-bubble .prep-lead{margin:0 0 14px;padding-bottom:12px;border-bottom:1px solid #edf0f5}
+.prep-bubble .prep-lead>p{margin:0;font-size:14px;line-height:1.75;color:#202b3b}
+.prep-bubble .prep-lead .policy-check-result{margin-top:10px}
+/* 少于 3 条时的追问并在结果卡片底部 */
+.followup-inline{margin-top:16px;padding-top:14px;border-top:1px solid #edf0f5}
+.followup-inline .followup-ask{margin:0 0 10px;font-size:14px;line-height:1.75;color:#202b3b}
