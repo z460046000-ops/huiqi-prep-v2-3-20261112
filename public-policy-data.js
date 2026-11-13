@@ -207,7 +207,7 @@
         templateStatus: 'missing',
         templateWhere: '可以在国家先进技术转化应用公共服务平台认证后，下载项目采集系统单机版填写，导出',
         checklist: [
-          { id: 'collect-system', label: '项目采集系统导出的申报材料', note: '在国家平台认证后下载单机版采集系统，按用户手册填写后导出' },
+          { id: 'collect-system', label: '项目采集系统导出的申报材料', uploadOnly: true, note: '在国家平台认证后下载单机版采集系统，按用户手册填写后导出' },
           { id: 'paper-copy', label: '盖公章的纸质材料', uploadOnly: true, note: '1 份' },
           { id: 'disc-copy', label: '电子光盘', uploadOnly: true, note: '1 份' },
           { id: 'domain', label: '技术产品属于七个领域之一', kind: 'condition', note: '网信、人工智能、无人系统、反无系统、量子、生物制造、脑机接口' },
