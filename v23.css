@@ -251,3 +251,11 @@
 .prep-advice.is-warn p{color:#9a3412}
 .prep-advice-fix{position:relative;z-index:1;margin-left:auto;padding:0;min-height:0;font-size:12px;white-space:nowrap}
 .prep-advice-fix+.prep-advice-view{margin-left:12px}
+/* 预审抽屉空状态：按“准备好了 / 没准备好”给两条路 */
+.review-guide{display:grid;gap:0;border:1px solid #dbe5f3;border-radius:12px;background:#fff;overflow:hidden}
+.review-guide-row{display:flex;align-items:center;gap:16px;padding:14px 16px}
+.review-guide-row+.review-guide-row{border-top:1px solid #eef2f7}
+.review-guide-row p{flex:1;min-width:0;margin:0;font-size:14px;line-height:1.6;color:#1d2733}
+.review-guide-btn{position:relative;flex:none;white-space:nowrap;overflow:hidden;cursor:pointer}
+.review-guide-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+@media(max-width:639px){.review-guide-row{flex-wrap:wrap}.review-guide-btn{width:100%;justify-content:center}}

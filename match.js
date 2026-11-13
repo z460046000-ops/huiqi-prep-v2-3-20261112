@@ -1131,9 +1131,14 @@
     }
     if (!source.provided) {
       const policy = publicPolicies().find(item => item.id === task.policyId);
-      const note = policy?.application?.checklist.find(entry => `${policy.id}-${entry.id}` === source.id)?.note || '';
-      const accept = '.doc,.docx,.txt,.md,.htm,.html,.pdf,.jpg,.jpeg,.png';
-      return `<section class="review-file"><div class="review-file-row"><div class="review-file-main"><span class="review-file-label">原文</span><span class="review-file-none">还没有文件</span></div><div class="review-file-actions"><label class="chat-gap-upload">上传完整文件<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${esc(source.name)}"></label><label class="chat-gap-upload">批量上传，AI 生成<input type="file" multiple data-source-generate ${attrs} accept="${accept}" aria-label="批量选择零散资料，AI 生成${esc(source.name)}"></label></div></div></section><section class="review-block is-lack"><h3>与政策差异</h3>${note ? `<p class="review-requirement"><b>政策要求：</b>${esc(note)}</p>` : ''}<p>上传或生成文件后，我再对照政策要求。</p></section><section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3></header><div class="review-ai-scroll" tabindex="0"><p class="review-ai-empty">有了文件后，这里会逐条列出原文、问题和修改建议。</p></div></section>`;
+      const spec = policy?.application?.checklist.find(entry => `${policy.id}-${entry.id}` === source.id);
+      const note = spec?.note || '';
+      // 证照、盖章件、照片、视频、光盘这类（库表 uploadOnly / media）只能上传，不给 AI 生成。
+      const uploadOnly = Boolean(spec?.uploadOnly || spec?.media);
+      const accept = spec?.media ? '.jpg,.jpeg,.png,.mp4,.mov' : '.doc,.docx,.txt,.md,.htm,.html,.pdf,.jpg,.jpeg,.png';
+      const ready = `<div class="review-guide-row"><p>「${esc(source.name)}」准备好了？</p><label class="button button-primary review-guide-btn">上传文件<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${esc(source.name)}"></label></div>`;
+      const draft = uploadOnly ? '' : `<div class="review-guide-row"><p>还没准备好？把企业资料批量传上来，我帮您提取、整理成初稿</p><label class="button button-secondary review-guide-btn">批量上传，AI 生成<input type="file" multiple data-source-generate ${attrs} accept="${accept}" aria-label="批量选择企业资料，AI 生成${esc(source.name)}"></label></div>`;
+      return `<section class="review-file"><div class="review-file-row"><div class="review-file-main"><span class="review-file-label">原文</span><span class="review-file-none">还没有文件</span></div></div></section><section class="review-block is-lack"><h3>与政策差异</h3>${note ? `<p class="review-requirement"><b>政策要求：</b>${esc(note)}</p>` : ''}<p>上传或生成文件后，我再对照政策要求。</p></section><section class="review-guide" aria-label="准备这份材料">${ready}${draft}</section><section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3></header><div class="review-ai-scroll" tabindex="0"><p class="review-ai-empty">上传文件后，为您列出材料的问题和修改意见。</p></div></section>`;
     }
     const review = reviewMaterial(task, source);
     const fileName = source.fileName || `${source.name}.doc`;
