@@ -246,3 +246,8 @@
 @media(max-width:639px){.upload-row{flex-wrap:wrap}.upload-main{flex-basis:100%}.upload-alt{width:100%}}
 
 .prep-card.is-compact>.upload-row{grid-column:1 / -1}
+/* 核对卡：有问题的材料，AI 建议块用提醒色，“去补写”和“查看”并排 */
+.prep-advice.is-warn{border-color:#f3c9a8;background:#fff8f1}
+.prep-advice.is-warn p{color:#9a3412}
+.prep-advice-fix{position:relative;z-index:1;margin-left:auto;padding:0;min-height:0;font-size:12px;white-space:nowrap}
+.prep-advice-fix+.prep-advice-view{margin-left:12px}

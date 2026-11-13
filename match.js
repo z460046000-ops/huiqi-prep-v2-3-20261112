@@ -2108,10 +2108,11 @@
       const sid = `${policy.id}-${item.id}`;
       const found = task.requirements.find(entry => entry.sourceId === sid);
       const req = found || { id: sid, label: item.label, status: state === 'lack' ? 'missing' : 'ready', kind: 'material', sourceId: sid, required: isRequired };
-      if (state === 'warn' && notes.length) issuesBy.set(sid, `<p class="check-issues"><b>有问题：</b>${esc(notes.join('；'))}<button type="button" class="text-button" data-action="guidance-prep" data-task="${id}">去补写</button></p>`);
+      // 核对结论直接写进这份材料的“AI 建议”，“去补写”放在建议标题行，不再在卡片下面另起一段。
+      if (state === 'warn' && notes.length) issuesBy.set(sid, { warn: true, text: `${notes.join('；')}。`, action: `<button type="button" class="text-button prep-advice-fix" data-action="guidance-prep" data-task="${id}">去补写</button>` });
       return req;
     };
-    const list = window.PolicyChat.prepSections(task, { required: required.map(toReq), optional: rows.filter(row => !row.required).map(toReq), after: req => issuesBy.get(req.sourceId) || '' });
+    const list = window.PolicyChat.prepSections(task, { required: required.map(toReq), optional: rows.filter(row => !row.required).map(toReq), advice: req => issuesBy.get(req.sourceId) || null });
     const ok = required.length - lack.length;
     const text = !uploaded
       ? '把准备好的文件传上来，我帮您核对。'

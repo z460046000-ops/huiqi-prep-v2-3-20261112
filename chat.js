@@ -202,11 +202,13 @@
     const E = U().escape, I = U().icon;
     return `<div class="upload-row"><label class="upload-main"><span class="upload-icon" aria-hidden="true">${I('upload')}</span><span class="upload-text"><b>${E(title)}</b><small>${E(hint)}</small></span><input type="file" ${inputAttrs}></label>${generate ? `<span class="upload-alt"><span>只有零散资料？</span>${generate}</span>` : ''}</div>`;
   }
-  function adviceMarkup(task,source,attrs){
+  // override：办理指引的核对卡把核对结论写进这一块（text），并在标题行加“去补写”（action），不再另起一段“有问题”。
+  function adviceMarkup(task,source,attrs,override=null){
     const E=U().escape,I=U().icon;
-    return `<div class="prep-advice"><div class="prep-advice-head"><span class="prep-advice-mark" aria-hidden="true">${I('spark')}</span><b>AI 建议</b><button type="button" class="text-button prep-advice-view" data-action="material-review" ${attrs}>查看 ${I('chevron')}</button></div><p>${E(window.PolicyMatch?.materialAdvice(task,source)||'')}</p></div>`;
+    const text=override?.text||window.PolicyMatch?.materialAdvice(task,source)||'';
+    return `<div class="prep-advice${override?.warn?' is-warn':''}"><div class="prep-advice-head"><span class="prep-advice-mark" aria-hidden="true">${I('spark')}</span><b>AI 建议</b>${override?.action||''}<button type="button" class="text-button prep-advice-view" data-action="material-review" ${attrs}>查看 ${I('chevron')}</button></div><p>${E(text)}</p></div>`;
   }
-  function materialCard(task,item,compact=false,label=''){
+  function materialCard(task,item,compact=false,label='',advice=null){
     const E=U().escape,I=U().icon;
     // 照片、视频（库表 media: true）只能上传，不提供 AI 生成。
     const policy=(window.PolicyPublicPolicies||[]).find(entry=>(item.sourceId||'').startsWith(`${entry.id}-`));
@@ -227,16 +229,16 @@
       if(count)body=`<div class="prep-busy" role="status"><span class="prep-spinner" aria-hidden="true"></span><div><strong>AI 正在生成《${E(item.label)}》</strong><small>正在从 ${count} 份资料里提取内容</small></div></div>`;
       else if(ready){
         const fileName=source.fileName||`${item.label}.doc`;
-        body=`<div class="prep-file"><span class="prep-file-icon" aria-hidden="true">${I('file')}</span><div class="prep-file-text"><strong title="${E(fileName)}">${E(fileName)}</strong></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div>${adviceMarkup(task,source,attrs)}`;
+        body=`<div class="prep-file"><span class="prep-file-icon" aria-hidden="true">${I('file')}</span><div class="prep-file-text"><strong title="${E(fileName)}">${E(fileName)}</strong></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div>${adviceMarkup(task,source,attrs,advice)}`;
       }else body=uploadRow({ inputAttrs: `data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"`, title: '上传文件', hint: media ? '图片、视频' : 'Word、PDF、图片', generate: uploadOnly ? '' : generate('AI 生成') });
       return `<article class="prep-card${ready?' is-ready':''}${compact&&!ready&&!count?' is-compact':''}" data-status="${E(item.status)}">${head}${note?`<p class="prep-card-note">${E(note)}</p>`:''}${body}</article>`;
   }
   /* 政策申报辅助：每份材料一张卡。两条路得到同一份文件：上传完整文件，或批量传零散资料由 AI 生成。 */
   /* 材料卡片外层（卡头 + 进度 + 必需/选填分组）：申报材料和办理指引的核对卡共用。after(item) 返回追加在该项卡片后的内容。 */
-  function prepSections(task,{required=[],optional=[],after=null}={}){
+  function prepSections(task,{required=[],optional=[],after=null,advice=null}={}){
     const done=required.filter(item=>item.status==='ready').length;
     const percent=required.length?Math.round(done/required.length*100):0;
-    const card=(item,compact,label)=>{const html=materialCard(task,item,compact,label);const extra=after?after(item)||'':'';return extra?`<div class="check-material">${html}${extra}</div>`:html;};
+    const card=(item,compact,label)=>{const html=materialCard(task,item,compact,label,advice?advice(item):null);const extra=after?after(item)||'':'';return extra?`<div class="check-material">${html}${extra}</div>`:html;};
     return `<header class="prep-head"><div class="prep-head-text">${window.PolicyMatch?.applicationIntro(task)||''}</div><div class="prep-progress"><strong>已准备 ${done} / ${required.length} 项</strong><span class="prep-progress-track" role="progressbar" aria-valuenow="${done}" aria-valuemax="${required.length}" aria-label="已准备 ${done}/${required.length} 项"><i style="width:${percent}%"></i></span></div></header><div class="prep-grid">${required.map((item,index)=>card(item,false,`材料 ${index+1}：`)).join('')}</div>${optional.length?`<h4 class="prep-subhead">选填材料</h4><div class="prep-stack">${optional.map((item,index)=>card(item,true,`选填 ${index+1}：`)).join('')}</div>`:''}`;
   }
   function prepMarkup(task,lead='') {
