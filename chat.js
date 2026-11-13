@@ -230,7 +230,7 @@
       else if(ready){
         const fileName=source.fileName||`${item.label}.doc`;
         body=`<div class="prep-file"><span class="prep-file-icon" aria-hidden="true">${I('file')}</span><div class="prep-file-text"><strong title="${E(fileName)}">${E(fileName)}</strong></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div>${adviceMarkup(task,source,attrs,advice)}`;
-      }else body=uploadRow({ inputAttrs: `data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"`, title: '上传文件', hint: media ? '图片、视频' : 'Word、PDF、图片', generate: uploadOnly ? '' : generate('智能上传') });
+      }else body=uploadRow({ inputAttrs: `data-source-upload ${attrs} accept="${accept}" aria-label="上传${E(item.label)}"`, title: '上传文件', hint: media ? '图片、视频' : 'Word、PDF、图片', generate: uploadOnly ? '' : generate('AI 生成') });
       return `<article class="prep-card${ready?' is-ready':''}${compact&&!ready&&!count?' is-compact':''}" data-status="${E(item.status)}">${head}${note?`<p class="prep-card-note">${E(note)}</p>`:''}${body}</article>`;
   }
   /* 政策申报辅助：每份材料一张卡。两条路得到同一份文件：上传完整文件，或批量传零散资料由 AI 生成。 */
