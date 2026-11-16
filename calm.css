@@ -180,7 +180,7 @@ body::before { content:""; display:block; position:fixed; inset:0; z-index:-1; p
 .recent-project.is-active { background:linear-gradient(90deg,#e8f0ff,#f0ebff); color:#1f4fd8; }
 
 /* v2.4d 首屏上移：星芒并入标题行首，顶部留白收紧，给追问弹窗留出空间。 */
-.start-hero { padding-top:clamp(48px,9vh,104px); }
+.start-hero { padding-top:clamp(72px,13vh,140px); }
 .start-hero h1 { display:block; text-align:center; font-size:clamp(28px,3cqw,40px); }
 @media (min-width:901px) { .start-hero h1 { white-space:nowrap; } }
 .start-hero h1>label { display:inline; }
