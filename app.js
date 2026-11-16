@@ -246,7 +246,7 @@
     sidebar();
     B.syncSelection();
     window.PolicyHomeFeed?.mount();
-    document.title = '企政策智能体V2.3';
+    document.title = '惠企政策智能体V2.4';
     restoreFormDraft();
     const documentContent=page.querySelector('.workspace-content');
     if(documentContent)documentContent.scrollTop=documentPositions.get(nextDocumentKey) || 0;
@@ -352,6 +352,15 @@
     if (target.dataset.action==='home-remove-file') {
       startDraft.files=startDraft.files.filter(file=>file.id!==target.dataset.file);
       render();
+      return;
+    }
+    if (target.dataset.action==='home-fill-company') {
+      const input=page.querySelector('#start-company-name');
+      if (input) {
+        input.value=target.dataset.name;
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+        input.focus();
+      }
       return;
     }
     if (target.dataset.action==='home-start-focus') {
