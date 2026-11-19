@@ -44,9 +44,15 @@
   const statusOf = policy => (!policy.applicationEnd ? 'notice' : policy.applicationEnd < today() ? 'closed' : 'open');
   const daysLeft = policy => Math.round((Date.parse(policy.applicationEnd) - Date.parse(today())) / 86400000);
 
-  /* 置信度（PRD V2.2 8.2.2）：中标“以原文为准”，低显示“待确认”；低置信度的截止日期不算剩余天数，低置信度的办理入口不直接打开。 */
+  /* 置信度（PRD V2.2 8.2.2）：中标“以原文为准”，低显示“待确认”；低置信度的截止日期不算剩余天数，低置信度的办理入口不直接打开。
+     V2.4：这两类标签和“见政策原文”都链到政策原文，点击仍走全局的离开确认框。 */
   const confOf = (policy, field) => policy?.confidence?.[field] || 'high';
-  const confTag = level => level === 'mid' ? '<em class="conf-tag is-mid">以原文为准</em>' : level === 'low' ? '<em class="conf-tag is-low">待确认</em>' : '';
+  const officialNote = (policy, text) => policy?.sourceUrl ? `<a class="conf-link" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>` : esc(text);
+  const confTag = (level, policy) => {
+    if (level !== 'mid' && level !== 'low') return '';
+    const text = level === 'mid' ? '以原文为准' : '待确认';
+    return policy?.sourceUrl ? `<a class="conf-tag is-${level} is-link" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">${text}</a>` : `<em class="conf-tag is-${level}">${text}</em>`;
+  };
   function windowText(policy) {
     const status = statusOf(policy);
     if (status === 'notice') return ongoing(policy) ? '按纳税期常态办理' : '暂无统一申报窗口';
@@ -70,19 +76,19 @@
         region && policy.region === '全国' && [1, '全国范围的政策'],
         industry && policy.industries.includes(industry) && [2, `${industry}在这项政策涉及的行业内`],
       ];
-      if (policy.supportType === '研发支持') rules.push(
-        rd && !rdLow && [2, `研发费占比 ${rd}，和研发支持方向相符`],
+      if (policy.supportType === '财政补贴') rules.push(
+        rd && !rdLow && [2, `研发费占比 ${rd}，和政策的研发要求相符`],
         rd && rdLow && [0, `研发费占比 ${rd}，研发投入要重点核对`],
         talent === '有' && [1, '近3年引进过人才，可作为研发能力的佐证'],
       );
-      if (policy.supportType === '资质培育') rules.push(
+      if (policy.supportType === '资质荣誉') rules.push(
         stage && !stage.startsWith('成熟') && [1, `处于${stage.slice(0, 3)}，可以核对培育条件`],
         rd && !rdLow && [1, `研发费占比 ${rd}，可作为资质材料的基础`],
       );
-      if (policy.supportType === '数字化改造') rules.push(
+      if (policy.supportType === '其他') rules.push(
         revenue && revenue !== '500万以下' && [1, `营业收入 ${revenue}，有条件开展数字化项目`],
       );
-      if (policy.supportType === '金融支持') rules.push(
+      if (policy.supportType === '融资支持') rules.push(
         stage && [1, `处于${stage.slice(0, 3)}，可以了解对应的金融服务`],
       );
       return rules.filter(Boolean);
@@ -140,9 +146,11 @@
   /* ---------- 对话里的资料收集 ---------- */
   const intakeActive = task => Boolean(task?.intake) && task.intake.stage !== 'ready';
 
+  /* V2.4：助手气泡底部带“重新生成”；点击后原地显示“正在重新生成…”，800ms 后按原内容重渲（原型没有模型，内容不变）。 */
   function assistantBubble(text, card = '', role = 'match') {
     const person = window.PolicyPersonas.get(role);
-    return `<div class="chat-message-row is-assistant"><span class="chat-message-avatar chat-message-expert-avatar" aria-hidden="true" style="--portrait-x:${person.x}%;--portrait-y:${person.y}%"></span><div class="chat-message-body intake-body"><span class="chat-message-name">${esc(person.name)}</span>${card ? `<div class="chat-message chat-assistant has-card"><p class="chat-bubble-lead">${esc(text)}</p>${card}</div>` : `<p class="chat-message chat-assistant">${esc(text)}</p>`}</div></div>`;
+    const regen = `<div class="chat-regen"><button type="button" class="text-button chat-regen-button" data-action="regen-bubble" data-role="${esc(role)}">${icon('refresh')}重新生成</button></div>`;
+    return `<div class="chat-message-row is-assistant"><span class="chat-message-avatar chat-message-expert-avatar" aria-hidden="true" style="--portrait-x:${person.x}%;--portrait-y:${person.y}%"></span><div class="chat-message-body intake-body"><span class="chat-message-name">${esc(person.name)}</span>${card ? `<div class="chat-message chat-assistant has-card"><p class="chat-bubble-lead">${esc(text)}</p>${card}</div>` : `<p class="chat-message chat-assistant">${esc(text)}</p>`}${regen}</div></div>`;
   }
 
   function userBubble(text) {
@@ -271,7 +279,7 @@
     if (hasNoTemplate(open)) {
       const items = open.application.checklist.filter(item => item.kind !== 'condition');
       const row = `<ol class="guidance-list"><li><button type="button" class="guidance-step" data-route="guidance" data-task="${esc(task.id)}" data-work="guidance"><span class="guidance-step-number">1</span><span class="guidance-step-copy"><strong>材料清单和办理步骤</strong><small>共 ${items.length} 项材料，${esc(submit.name)}，${esc(dueText)}</small></span>${icon('arrow')}</button></li></ol>`;
-      return assistantBubble('这项政策没有申报模板，不生成初稿。按材料清单准备后，到官方系统办理。', row, 'guidance');
+      return assistantBubble('这项政策没有申报模板，不生成初稿。按材料清单准备后，到官方系统办理。', `${row}${feedbackMarkup('guide', open?.id || policy.id)}`, 'guidance');
     }
     const rows = [
       // V2.3：从“核对并提交”进来的任务，材料核对结果在上面的核对卡里，这一步直接引用它。
@@ -279,7 +287,7 @@
       { title: '检查申报材料', detail: !latest ? '还没有申报材料' : scored ? `V${latest.number}，材料准备度 ${scored.ready}/${scored.total}` : `V${latest.number}，点开查看全部内容`, attrs: latest ? `data-route="version" data-id="${esc(latest.id)}"` : 'data-action="guidance-prep"', work: latest ? 'guidance' : 'assembly', state: !latest ? '待整理' : latest.status === 'confirmed' ? '已确认' : '待确认', done: latest?.status === 'confirmed' },
       { title: submit?.email ? '发邮件报送' : '到官方系统提交', detail: submit ? `${submit.name}，${dueText}` : '按政策指定的官方渠道办理', attrs: 'data-route="guidance"', state: '' },
     ];
-    const card = `<ol class="guidance-list">${rows.map((row, index) => `<li><button type="button" class="guidance-step" ${row.attrs} data-task="${esc(task.id)}" data-work="${row.work || 'guidance'}"><span class="guidance-step-number">${index + 1}</span><span class="guidance-step-copy"><strong>${esc(row.title)}</strong><small>${esc(row.detail)}</small></span>${row.state ? `<span class="guidance-step-state${row.done ? ' is-done' : ''}">${esc(row.state)}</span>` : ''}${icon('arrow')}</button></li>`).join('')}</ol>`;
+    const card = `<ol class="guidance-list">${rows.map((row, index) => `<li><button type="button" class="guidance-step" ${row.attrs} data-task="${esc(task.id)}" data-work="${row.work || 'guidance'}"><span class="guidance-step-number">${index + 1}</span><span class="guidance-step-copy"><strong>${esc(row.title)}</strong><small>${esc(row.detail)}</small></span>${row.state ? `<span class="guidance-step-state${row.done ? ' is-done' : ''}">${esc(row.state)}</span>` : ''}${icon('arrow')}</button></li>`).join('')}</ol>${feedbackMarkup('guide', open?.id || policy.id)}`;
     return assistantBubble(`接下来这样办，点开每一步看详情。`, card, 'guidance');
   }
 
@@ -312,27 +320,30 @@
   }
 
   /* 抽屉里的提交详情；没有整理过的政策沿用原来的办理页。 */
-  /* 前往官方系统：先二次确认，同一政策确认过就不再问；每次都记一条事件。 */
+  /* 前往官方系统：先二次确认，同一政策确认过就不再问；每次都记一条事件。
+     V2.4：确认框里点“确认”或“取消”都记一条（popup 字段区分），取消不打开新窗口；
+     “上次前往”只看确认过的记录，旧数据没有 popup 字段的当作 confirm。 */
   const jumpKey = 'huiqi-official-jumps-v23';
   const confirmedJumps = new Set();
+  const wentThrough = item => item.popup !== 'cancel';
   /* V2.3 顶部步骤用：这个任务选了哪条政策、匹配度、材料准备到几项、截止时间、最近一次前往官方系统。 */
   function stepInfo(task) {
     const open = task?.steps?.match && task.policyId !== 'no-policy' ? publicPolicies().find(item => item.id === task.policyId) : null;
     if (!open) return { hasPolicy: false };
     const items = (open.application?.checklist || []).filter(item => item.kind !== 'condition' && item.required !== false);
     const ready = items.filter(item => task.sources?.some(source => source.id === `${open.id}-${item.id}` && source.provided)).length;
-    const last = jumpEvents().filter(item => item.taskId === task.id && item.policyId === open.id).at(-1);
+    const last = jumpEvents().filter(item => item.taskId === task.id && item.policyId === open.id && wentThrough(item)).at(-1);
     const date = last ? new Date(last.at) : null;
     return { hasPolicy: true, title: open.title, level: policyScore(task, open)?.level || '', ready, total: items.length, status: statusOf(open), due: windowText(open), jumped: date ? `${date.getMonth() + 1}月${date.getDate()}日` : '' };
   }
   function jumpEvents() { try { return JSON.parse(localStorage.getItem(jumpKey) || '[]'); } catch { return []; } }
-  function recordJump(link) {
+  function recordJump(link, popup = 'confirm') {
     const events = jumpEvents();
-    events.push({ taskId: link.dataset.task, policyId: link.dataset.policy, platform: link.dataset.name, url: link.href, source: 'guidance', at: new Date().toISOString() });
+    events.push({ taskId: link.dataset.task, policyId: link.dataset.policy, platform: link.dataset.name, url: link.href, source: 'guidance', popup, at: new Date().toISOString() });
     try { localStorage.setItem(jumpKey, JSON.stringify(events.slice(-200))); } catch {}
   }
   function jumpLog(taskId, policyId) {
-    const last = jumpEvents().filter(item => item.taskId === taskId && item.policyId === policyId).at(-1);
+    const last = jumpEvents().filter(item => item.taskId === taskId && item.policyId === policyId && wentThrough(item)).at(-1);
     if (!last) return '';
     const date = new Date(last.at);
     return `<p class="guidance-jump-log">已于 ${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())} ${/^mailto:/.test(last.url || '') ? '打开邮件准备报送' : '前往官方系统'}</p>`;
@@ -357,7 +368,12 @@
       const action = event.target instanceof Element ? event.target.closest('[data-leave]')?.dataset.leave : '';
       if (!action) return;
       closeLeaveDialog();
-      if (action === 'go') goOfficial(link); else link.focus({ preventScroll: true });
+      if (action === 'go') goOfficial(link);
+      else {
+        // 取消也记一条点击事件（不打开新窗口），便于统计确认框的放弃率。
+        if (link.hasAttribute('data-official-jump')) recordJump(link, 'cancel');
+        link.focus({ preventScroll: true });
+      }
     });
     dialog.querySelector('[data-leave="go"]').focus({ preventScroll: true });
   }
@@ -378,13 +394,13 @@
     const mail = Boolean(submit?.email);
     const lowDate = confOf(policy, 'applicationEnd') === 'low', lowUrl = confOf(policy, 'submitUrl') === 'low';
     const left = statusOf(policy) === 'open' && !lowDate ? daysLeft(policy) : null;
-    const facts = [['截止时间', lowDate ? '待确认，以原文为准' : submit?.deadline || windowText(policy)], ...(left !== null ? [['还剩', `${left} 天`]] : []), ...(submit?.contact ? [['咨询', submit.contact]] : [])];
+    const facts = [['截止时间', lowDate ? officialNote(policy, '待确认，以原文为准') : esc(submit?.deadline || windowText(policy))], ...(left !== null ? [['还剩', esc(`${left} 天`)]] : []), ...(submit?.contact ? [['咨询', esc(submit.contact)]] : [])];
     const steps = [
       lowUrl ? { title: '确认办理渠道', detail: '办理入口还没核实，请先看政策原文写明的渠道', action: `<a class="button button-secondary" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看原文中的办理渠道 ${icon('arrow')}</a>` } : { title: mail ? '发邮件报送' : '打开官方系统', detail: submit ? (mail ? `${submit.name}：${submit.email}` : submit.name) : '按原文写明的渠道办理', action: `<a class="button button-primary" href="${esc(submit?.url || policy.sourceUrl)}" target="_blank" rel="noopener noreferrer" data-official-jump data-task="${esc(task.id)}" data-policy="${esc(policy.id)}" data-name="${esc(submit?.name || policy.agency)}">${mail ? '写邮件' : submit ? '打开系统' : '查看原文'} ${icon('arrow')}</a>` },
       ...(submit ? submit.steps : []).map(step => ({ title: step })),
       mail ? { title: '保存发送记录', detail: '发送后保留已发送的邮件和附件，以便后续查询。' } : { title: '保存回执', detail: '提交后保存系统的回执，以便后续查询。' },
     ];
-    return `<div class="guidance-detail"><h2 class="sr-only">${mail ? '发邮件报送' : '到官方系统提交'}</h2><section class="drawer-summary guidance-summary"><p>${esc(policy.title)}</p><dl>${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></section>${hasNoTemplate(policy) ? `<section class="guidance-materials"><h3>材料清单</h3><p>这项政策没有申报模板，不生成初稿，按清单准备。</p><ul>${policy.application.checklist.filter(item => item.kind !== 'condition').map(item => `<li><strong>${esc(item.label)}${confTag(item.confidence)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ''}</li>`).join('')}</ul></section>` : ''}<ol class="guidance-timeline">${steps.map(step => `<li${step.detail ? '' : ' class="is-plain"'}><div><strong>${esc(step.title)}</strong>${step.detail ? `<small>${esc(step.detail)}</small>` : ''}</div>${step.action || ''}</li>`).join('')}</ol>${jumpLog(task.id, policy.id)}<p class="guidance-note">${mail ? '邮件要你本人从单位邮箱发送。' : '登录和提交要你本人在官方系统完成。'}</p>${applicationGuidance(policy) ? `<div class="guidance-policy-note">${applicationGuidance(policy)}</div>` : ''}<div class="guidance-fallback"><span>${mail ? '邮件程序打不开？' : '官方系统打不开？'}</span><button type="button" class="text-button" data-action="copy-official" data-url="${esc(mail ? submit.email : submit?.url || policy.sourceUrl)}">${mail ? '复制邮箱地址' : '复制官方链接'}</button><button type="button" class="text-button" data-action="guidance-service">联系人工客服</button></div></div>` + (jumpEvents().some(item => item.taskId === task.id && item.policyId === policy.id) ? '' : serviceRec('handling'));
+    return `<div class="guidance-detail"><h2 class="sr-only">${mail ? '发邮件报送' : '到官方系统提交'}</h2><section class="drawer-summary guidance-summary"><p>${esc(policy.title)}</p><dl>${facts.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl></section>${hasNoTemplate(policy) ? `<section class="guidance-materials"><h3>材料清单</h3><p>这项政策没有申报模板，不生成初稿，按清单准备。</p><ul>${policy.application.checklist.filter(item => item.kind !== 'condition').map(item => `<li><strong>${esc(item.label)}${confTag(item.confidence, policy)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ''}</li>`).join('')}</ul></section>` : ''}<ol class="guidance-timeline">${steps.map(step => `<li${step.detail ? '' : ' class="is-plain"'}><div><strong>${esc(step.title)}</strong>${step.detail ? `<small>${esc(step.detail)}</small>` : ''}</div>${step.action || ''}</li>`).join('')}</ol>${jumpLog(task.id, policy.id)}<p class="guidance-note">${mail ? '邮件要你本人从单位邮箱发送。' : '登录和提交要你本人在官方系统完成。'}</p>${applicationGuidance(policy) ? `<div class="guidance-policy-note">${applicationGuidance(policy)}</div>` : ''}<div class="guidance-fallback"><span>${mail ? '邮件程序打不开？' : '官方系统打不开？'}</span><button type="button" class="text-button" data-action="copy-official" data-url="${esc(mail ? submit.email : submit?.url || policy.sourceUrl)}">${mail ? '复制邮箱地址' : '复制官方链接'}</button><button type="button" class="text-button" data-action="guidance-service">联系人工客服</button></div>${feedbackMarkup('guide', policy.id)}</div>` + (jumpEvents().some(item => item.taskId === task.id && item.policyId === policy.id && wentThrough(item)) ? '' : serviceRec('handling'));
   }
 
   /* 公开政策的详情：和政策列表用同一张结构化卡片。 */
@@ -394,6 +410,60 @@
     const matched = matchPolicies(factsOf(task)).find(item => item.policy.id === policyId);
     return `<div class="match-drawer-body-inline">${policyCard(task, { policy, status: statusOf(policy), reasons: matched?.reasons || [] }, false)}</div>`;
   }
+
+  /* ---------- V2.4：AI 结果的点赞 / 点踩。同一位置、同一政策一个会话只评一次（sessionStorage）；
+     每次评价写 localStorage huiqi-feedback-v24；点踩后在下方展开原因（可不选），点一个即记录 ---------- */
+  const FEEDBACK_STORE = 'huiqi-feedback-v24';
+  const REGEN_STORE = 'huiqi-regenerate-v24';
+  const FEEDBACK_DONE_KEY = 'huiqi-feedback-done-v24';
+  const FEEDBACK_REASONS = ['不准确', '看不懂', '没用', '信息过时', '其他'];
+  const thumbIcons = {
+    like: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>',
+    dislike: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>',
+  };
+  const feedbackDone = () => { try { return JSON.parse(sessionStorage.getItem(FEEDBACK_DONE_KEY) || '{}'); } catch { return {}; } };
+  const feedbackPick = (position, policyId) => feedbackDone()[`${position}|${policyId || ''}`] || '';
+  function recordFeedback(position, policyId, action, reason = '') {
+    try { sessionStorage.setItem(FEEDBACK_DONE_KEY, JSON.stringify({ ...feedbackDone(), [`${position}|${policyId || ''}`]: action })); } catch {}
+    let events = [];
+    try { events = JSON.parse(localStorage.getItem(FEEDBACK_STORE) || '[]'); } catch {}
+    events.push({ position, action, reason, policyId: policyId || '', at: new Date().toISOString() });
+    try { localStorage.setItem(FEEDBACK_STORE, JSON.stringify(events.slice(-200))); } catch {}
+  }
+  function feedbackMarkup(position, policyId = '') {
+    const picked = feedbackPick(position, policyId);
+    const attrs = `data-position="${esc(position)}" data-policy="${esc(policyId || '')}"`;
+    const vote = (action, label) => `<button type="button" class="feedback-vote${picked === action ? ' is-on' : ''}" data-feedback-vote="${action}" ${attrs} aria-pressed="${picked === action}" aria-label="${label}" title="${label}">${thumbIcons[action]}</button>`;
+    return `<div class="feedback-row"${picked ? ' aria-label="这个会话里已反馈过"' : ''}><span class="feedback-ask">这条结果有帮助吗？</span>${vote('like', '点赞')}${vote('dislike', '点踩')}</div>`;
+  }
+  const feedbackReasons = (position, policyId) => `<div class="feedback-reasons"><span>没帮助的原因（可不选）：</span>${FEEDBACK_REASONS.map(reason => `<button type="button" class="feedback-reason" data-feedback-reason="${esc(reason)}" data-position="${esc(position)}" data-policy="${esc(policyId || '')}">${esc(reason)}</button>`).join('')}</div>`;
+  document.addEventListener('click', event => {
+    const target = event.target instanceof Element ? event.target.closest('[data-feedback-vote], [data-feedback-reason]') : null;
+    if (!target) return;
+    const { position, policy } = target.dataset;
+    if (target.dataset.feedbackReason) {
+      // 补选原因：写回本次会话最近一条同位置、同政策的点踩记录。
+      try {
+        const events = JSON.parse(localStorage.getItem(FEEDBACK_STORE) || '[]');
+        for (let index = events.length - 1; index >= 0; index -= 1) {
+          if (events[index].position === position && events[index].policyId === (policy || '') && events[index].action === 'dislike') { events[index].reason = target.dataset.feedbackReason; break; }
+        }
+        localStorage.setItem(FEEDBACK_STORE, JSON.stringify(events));
+      } catch {}
+      target.closest('.feedback-reasons')?.remove();
+      return;
+    }
+    if (feedbackPick(position, policy)) return;  // 评过了：按钮保持选中，不再弹原因
+    const action = target.dataset.feedbackVote;
+    recordFeedback(position, policy, action);
+    const row = target.closest('.feedback-row');
+    row?.querySelectorAll('[data-feedback-vote]').forEach(button => {
+      const on = button === target;
+      button.classList.toggle('is-on', on);
+      button.setAttribute('aria-pressed', String(on));
+    });
+    if (action === 'dislike' && row) row.insertAdjacentHTML('afterend', feedbackReasons(position, policy));
+  });
 
   /* ---------- 政策解读：在对话里选政策、看解读 ---------- */
   const factsOf = task => {
@@ -467,7 +537,8 @@
   /* 预估补贴：只用政策写明的金额或上限，没写的不估算，显示“以原文为准”。 */
   function subsidyStat(policy) {
     const s = policy.subsidy;
-    return s ? `<span class="policy-stat policy-subsidy"><strong>${s.prefix ? `<small class="policy-stat-prefix">${esc(s.prefix)}</small>` : ''}${esc(s.value)}<small>${esc(s.unit)}</small></strong><small>预估补贴${confOf(policy, 'subsidy') === 'mid' ? ' · 以原文为准' : ''}</small></span>` : `<span class="policy-stat policy-subsidy is-text"><strong>以原文为准</strong><small>预估补贴</small></span>`;
+    const note = officialNote(policy, '以原文为准');
+    return s ? `<span class="policy-stat policy-subsidy"><strong>${s.prefix ? `<small class="policy-stat-prefix">${esc(s.prefix)}</small>` : ''}${esc(s.value)}<small>${esc(s.unit)}</small></strong><small>预估补贴${confOf(policy, 'subsidy') === 'mid' ? ` · ${note}` : ''}</small></span>` : `<span class="policy-stat policy-subsidy is-text"><strong>${note}</strong><small>预估补贴</small></span>`;
   }
   const industryMiss = (task, policy) => { const industry = factsOf(task).industry; return industry && policy.industries.length && !policy.industries.includes(industry) ? industry : ''; };
   function scoreBadge(task, policy) {
@@ -526,6 +597,7 @@
   /* 经营风险：没有找到可公开核验的真实记录，只能用模拟开关演示，记录上写明是模拟的。 */
   const companyRisks = task => sim('risk') && !companyNotFound(task) ? [['经营异常（模拟）', '1 条，列入原因：通过登记的住所无法联系。这条记录由模拟开关生成，不是该企业的真实记录']] : [];
   function diagnosisCard(task) {
+    if (!SERVICES_ENABLED) return '';  // 一期不出服务推荐，经营风险卡只在二期随信用修复服务一起出现
     if (companyNotFound(task)) return '';
     // 只在查到风险时出现；没有风险的企业不打扰。
     const risks = companyRisks(task);
@@ -801,14 +873,15 @@
     handling: { title: '申报有困难？了解专业申报服务', sub: '万大圣 · 项目申报服务' },
     risk: { title: '经营异常会影响申报资格', sub: '万大圣 · 信用修复服务' },
   };
-  const SERVICES_OFF = true;
+  /* V2.4：一期页面不出现服务推荐（PRD）。改成 true 恢复全部服务卡和经营风险卡。 */
+  const SERVICES_ENABLED = false;
   const dismissedServices = new Set();
   const serviceBatches = {};
   const marketCard = (service, href) => `<a class="interpret-service-card is-marketplace" href="${href}" target="_blank" rel="noopener noreferrer"><img class="interpret-service-thumbnail" src="${esc(service.cover)}" alt="" width="76" height="76" loading="lazy"><div class="interpret-service-copy"><h4>${esc(service.name)}</h4><p>${esc(service.description)}</p><span class="interpret-service-entry">查看服务 ${icon('arrow')}</span></div></a>`;
   const kindCards = kind => { const list = serviceCatalog[kind] || [], b = serviceBatches[kind] || 0; return list.slice(b * serviceBatchSize, (b + 1) * serviceBatchSize).map(item => marketCard(item, SERVICE_DETAIL(item.id))).join(''); };
   /* 所有服务推荐统一成专利服务那种样式：标题、来源、换一批、两张服务卡。“暂不需要”后本次会话同类不再出现。 */
   function serviceSection(kind, { num = '', title = '', sub = '', cards = '', pages = 0 } = {}) {
-    if (SERVICES_OFF) return '';  // V2.2：一期不做服务推荐，代码保留给二期
+    if (!SERVICES_ENABLED) return '';  // V2.2：一期不做服务推荐，代码保留给二期
     if (dismissedServices.has(kind)) return '';
     const meta = serviceKinds[kind] || {};
     const total = pages || Math.ceil((serviceCatalog[kind] || []).length / serviceBatchSize);
@@ -825,7 +898,7 @@
     const out = [];
     // 差的是专利、软著时走知识产权推荐（下方专利服务），这里不重复。
     if (gaps.length === 1 && !['patents', 'copyrights'].includes(gaps[0].key) && gaps[0].metric.need - gaps[0].metric.have <= 2) out.push(serviceRec('qualification'));
-    if (rdLowOptions.includes(rd) && ['研发支持', '资质培育'].includes(policy.supportType)) out.push(serviceRec('rdFee'));
+    if (rdLowOptions.includes(rd) && ['财政补贴', '资质荣誉'].includes(policy.supportType)) out.push(serviceRec('rdFee'));
     return out.join('');
   }
   function adviceMarkup(policy,result) {
@@ -839,7 +912,7 @@
     const now=`按现有信息，这项政策的匹配度为 <b>${result.level}</b>`;
     const text=unknownStep?`${now}。我还不知道您的${esc(unknownStep.label)}，告诉我后帮您重新匹配。`:step?`${now}，补充 ${step.metric.need-step.metric.have} ${metricUnit(step.metric.unit)}${esc(step.metric.label)}后${lift?`，匹配度可从${result.level}提到 <b>${next.level}</b>`:'，更接近政策要求'}。`:result.pending?`${now}。还有 ${result.pending} 项待补充，补充后更准。`:(()=>{const tbc=result.rows.filter(row=>isScored(row)&&row.status==='tbc').length,ind=result.rows.find(row=>row.key==='industry'&&row.status==='missing');return ind||tbc?`${now}。${ind?'企业行业不在政策支持的行业里，申报前核对。':''}${tbc?`还有 ${tbc} 项政策写得不够明确（待确认），以原文为准。`:''}`:`${now}。条件已基本符合，可以准备申报材料。`;})();
     const meter=lift?`<div class="interpret-advice-lift" aria-hidden="true"><div class="interpret-advice-numbers"><span>${result.level}</span>${icon('arrow')}<strong>${next.level}</strong></div><div class="interpret-advice-bar"><i style="width:${result.shown}%"></i><i class="is-gain" style="width:${next.shown-result.shown}%"></i></div></div>`:'';
-    return `<aside class="interpret-advice${meter?'':' is-plain'}" aria-label="AI 建议"><div class="interpret-advice-copy"><span class="interpret-advice-tag">${icon('spark')} AI 建议</span><p>${text}</p><small>按现有信息判断，仅供参考，以主管部门审核为准。</small></div>${meter}</aside>`;
+    return `<aside class="interpret-advice${meter?'':' is-plain'}" aria-label="AI 建议"><div class="interpret-advice-copy"><span class="interpret-advice-tag">${icon('spark')} AI 建议</span><p>${text}</p><small>按现有信息判断，仅供参考，以主管部门审核为准。</small>${feedbackMarkup('diagnosis', policy.id)}</div>${meter}</aside>`;
   }
   function recommendationMarkup(task,policy,rows) {
     if(!task.id)return '';
@@ -913,8 +986,8 @@
   function interpretCard(task, policy) {
     const result=policyScore(task,policy),rows=result?.rows||comparisonRows(task,policy),materials=rows.find(row=>row.key==='materials');
     const pending=rows.filter(row=>row.status!=='ready'&&row.key!=='materials').length;
-    const facts=[['支持方向',policy.supportType],['适用地区',policy.region],['申报时间',confOf(policy,'applicationEnd')==='low'?'见政策原文':windowText(policy),confTag(confOf(policy,'applicationEnd'))],...(policy.subsidy?[['扶持金额',`${policy.subsidy.prefix||''}${policy.subsidy.value}${policy.subsidy.unit}`,confTag(confOf(policy,'subsidy'))]]:[]),['发布机构',policy.agency]];
-    return `<div class="policy-review"><section class="interpret-overview"><div class="interpret-eyebrow">01 / 了解政策</div><h3><a class="interpret-title" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(policy.title)} ${icon('arrow')}</a></h3>${sim('interpretFail') ? `<div class="interpret-summary is-failed" role="status"><p>白话解读暂时没有生成，下面先列出从原文提取的字段，请稍后重试。</p><button type="button" class="text-button" data-action="interpret-retry" data-task="${esc(task.id)}" data-policy="${esc(policy.id)}">重试</button></div>` : `<p class="interpret-summary">${esc(policy.summary)}</p>`}<div class="interpret-summary-grid"><dl class="interpret-facts">${facts.map(([label,value,tag=''])=>`<div><dt>${label}</dt><dd>${esc(value)}${tag}</dd></div>`).join('')}</dl><div class="interpret-score-result"><span>匹配度</span><strong data-total-score="${result?.score??''}">${result?result.level:'—'}</strong><div><b>${pending}</b> 项可能不符或未知</div>${suggestPause(result, policy) ? pauseTag : ''}<small>${{ open: '地区、行业只做准入判断，未知不过滤；其余条件每项权重相同，满足越多越高；材料不计入匹配度', notice: ongoing(policy) ? '按纳税期常态办理，不是集中申报' : '暂未开放申报，可以提前准备', closed: '本期已截止，无法申报' }[statusOf(policy)]}</small></div></div>${conditionsNotice(policy)}</section><section class="interpret-comparison" aria-labelledby="comparison-title"><div class="interpret-section-heading"><span>02</span><div><h3 id="comparison-title">逐项对照，看看还差什么</h3><p>逐项核对企业现状是否符合政策要求。</p></div></div><div class="interpret-table-scroll" tabindex="0" role="region" aria-label="政策条件对照表"><table class="interpret-table"><thead><tr><th scope="col">对照维度</th><th scope="col">政策要求</th><th scope="col">企业现状</th><th scope="col">操作</th></tr></thead><tbody>${rows.filter(row=>row.key!=='materials').map(row=>comparisonRow(task,policy,row)).join('')}</tbody></table></div>${rangeAskInline(task,policy)}<div id="interpret-supplement" aria-live="polite"></div>${policy.applicationTimeNote?`<p class="interpret-time-note">${esc(policy.applicationTimeNote)}</p>`:''}</section>${adviceMarkup(policy,result)}${interpretServices(task,policy,result)}${recommendationMarkup(task,policy,rows)}<p class="interpret-disclaimer">本产品仅提供信息检索、解读与申报指引，不构成申报或权益承诺，最终以政府官方平台审核为准。</p></div>`;
+    const facts=[['政策类型',esc(policy.supportType)],['适用地区',esc(policy.region)],['申报时间',confOf(policy,'applicationEnd')==='low'?officialNote(policy,'见政策原文'):esc(windowText(policy)),confTag(confOf(policy,'applicationEnd'),policy)],...(policy.subsidy?[['扶持金额',esc(`${policy.subsidy.prefix||''}${policy.subsidy.value}${policy.subsidy.unit}`),confTag(confOf(policy,'subsidy'),policy)]]:[]),['发布机构',esc(policy.agency)]];
+    return `<div class="policy-review"><section class="interpret-overview"><div class="interpret-eyebrow">01 / 了解政策</div><h3><a class="interpret-title" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(policy.title)} ${icon('arrow')}</a></h3>${sim('interpretFail') ? '' : `<p class="interpret-summary">${esc(policy.summary)}</p>`}<div class="interpret-summary-grid"><dl class="interpret-facts">${facts.map(([label,value,tag=''])=>`<div><dt>${label}</dt><dd>${value}${tag}</dd></div>`).join('')}</dl><div class="interpret-score-result"><span>匹配度</span><strong data-total-score="${result?.score??''}">${result?result.level:'—'}</strong><div><b>${pending}</b> 项可能不符或未知</div>${suggestPause(result, policy) ? pauseTag : ''}<small>${{ open: '只有地区做准入判断；行业和其余条件每项权重相同，满足越多越高；材料不计入匹配度', notice: ongoing(policy) ? '按纳税期常态办理，不是集中申报' : '暂未开放申报，可以提前准备', closed: '本期已截止，无法申报' }[statusOf(policy)]}</small></div></div>${conditionsNotice(policy)}</section><section class="interpret-comparison" aria-labelledby="comparison-title"><div class="interpret-section-heading"><span>02</span><div><h3 id="comparison-title">逐项对照，看看还差什么</h3><p>逐项核对企业现状是否符合政策要求。</p></div></div><div class="interpret-table-scroll" tabindex="0" role="region" aria-label="政策条件对照表"><table class="interpret-table"><thead><tr><th scope="col">对照维度</th><th scope="col">政策要求</th><th scope="col">企业现状</th><th scope="col">操作</th></tr></thead><tbody>${rows.filter(row=>row.key!=='materials').map(row=>comparisonRow(task,policy,row)).join('')}</tbody></table></div>${rangeAskInline(task,policy)}<div id="interpret-supplement" aria-live="polite"></div>${policy.applicationTimeNote?`<p class="interpret-time-note">${esc(policy.applicationTimeNote)}</p>`:''}</section>${adviceMarkup(policy,result)}${interpretServices(task,policy,result)}${recommendationMarkup(task,policy,rows)}<p class="interpret-disclaimer">本产品仅提供信息检索、解读与申报指引，不构成申报或权益承诺，最终以政府官方平台审核为准。</p>${feedbackMarkup('interpret', policy.id)}</div>`;
   }
 
   function updateInterpretDrawer(task,policy) {
@@ -1127,7 +1200,7 @@
     if (checklistItem?.media && source.provided) {
       const fileName=source.fileName||source.name;
       const mediaAdvice=`已收到。照片、视频的内容需要人工核对${checklistItem.note ? `；要求：${checklistItem.note}` : ''}。`;
-      return `<section class="review-file"><div class="review-file-row"><div class="review-file-main"><span class="review-file-label">原文</span><span class="review-file-link">${icon('file')}<span>${esc(fileName)}</span></span></div><div class="review-file-actions"><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept=".jpg,.jpeg,.png,.mp4,.mov" aria-label="重新上传${esc(source.name)}"></label></div></div></section><section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3></header><div class="review-ai-scroll" tabindex="0"><p>${esc(mediaAdvice)}</p></div></section>`;
+      return `<section class="review-file"><div class="review-file-row"><div class="review-file-main"><span class="review-file-label">原文</span><span class="review-file-link">${icon('file')}<span>${esc(fileName)}</span></span></div><div class="review-file-actions"><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept=".jpg,.jpeg,.png,.mp4,.mov" aria-label="重新上传${esc(source.name)}"></label></div></div></section><section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3></header><div class="review-ai-scroll" tabindex="0"><p>${esc(mediaAdvice)}</p></div>${feedbackMarkup('material', task.policyId)}</section>`;
     }
     if (!source.provided) {
       const policy = publicPolicies().find(item => item.id === task.policyId);
@@ -1138,7 +1211,7 @@
       const accept = spec?.media ? '.jpg,.jpeg,.png,.mp4,.mov' : '.doc,.docx,.txt,.md,.htm,.html,.pdf,.jpg,.jpeg,.png';
       const ready = `<div class="review-guide-row"><p>「${esc(source.name)}」准备好了？</p><label class="button button-primary review-guide-btn">上传文件<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="上传${esc(source.name)}"></label></div>`;
       const draft = uploadOnly ? '' : `<div class="review-guide-row"><p>还没准备好？把企业资料批量传上来，我帮您提取、整理成初稿</p><label class="button button-secondary review-guide-btn">批量上传，AI 生成<input type="file" multiple data-source-generate ${attrs} accept="${accept}" aria-label="批量选择企业资料，AI 生成${esc(source.name)}"></label></div>`;
-      return `<section class="review-file"><div class="review-file-row"><div class="review-file-main"><span class="review-file-label">原文</span><span class="review-file-none">还没有文件</span></div></div></section><section class="review-block is-lack"><h3>与政策差异</h3>${note ? `<p class="review-requirement"><b>政策要求：</b>${esc(note)}</p>` : ''}<p>上传或生成文件后，我再对照政策要求。</p></section><section class="review-guide" aria-label="准备这份材料">${ready}${draft}</section><section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3></header><div class="review-ai-scroll" tabindex="0"><p class="review-ai-empty">上传文件后，为您列出材料的问题和修改意见。</p></div></section>`;
+      return `<section class="review-file"><div class="review-file-row"><div class="review-file-main"><span class="review-file-label">原文</span><span class="review-file-none">还没有文件</span></div></div></section><section class="review-block is-lack"><h3>与政策差异</h3>${note ? `<p class="review-requirement"><b>政策要求：</b>${esc(note)}</p>` : ''}<p>上传或生成文件后，我再对照政策要求。</p></section><section class="review-guide" aria-label="准备这份材料">${ready}${draft}</section><section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3></header><div class="review-ai-scroll" tabindex="0"><p class="review-ai-empty">上传文件后，为您列出材料的问题和修改意见。</p></div>${feedbackMarkup('material', task.policyId)}</section>`;
     }
     const review = reviewMaterial(task, source);
     const fileName = source.fileName || `${source.name}.doc`;
@@ -1150,7 +1223,7 @@
     const rows = items.map((item, index) => `<li class="review-ai-item"><span class="review-ai-index">${index + 1}</span><dl><div><dt>原文</dt><dd class="is-original">${maskedHtml(item.original)}</dd></div><div><dt class="is-problem">问题</dt><dd>${esc(item.problem)}</dd></div><div class="is-suggestion"><dt>AI 建议</dt><dd>${maskedHtml(item.suggestion)}</dd></div></dl></li>`).join('');
     const content = review.unreadable ? '<p class="review-ai-empty">这份文件读不到文字。上传 Word（.docx）或文本文件后，才能给出建议。</p>' : items.length ? `<ol class="review-ai-list">${rows}</ol>` : '<p class="review-ai-empty">这份材料没有发现需要修改的地方。</p>';
     const download = items.length ? `<button type="button" class="review-ai-download" data-action="mat-advice-download" ${attrs}>${icon('download')}下载</button>` : '';
-    const ai = `<section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3>${items.length ? `<small>${items.length} 条</small>` : ''}</header><div class="review-ai-scroll" tabindex="0">${content}</div>${download}</section>`;
+    const ai = `<section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3>${items.length ? `<small>${items.length} 条</small>` : ''}</header><div class="review-ai-scroll" tabindex="0">${content}</div>${download}${feedbackMarkup('material', task.policyId)}</section>`;
     const expects = publicPolicies().find(item => item.id === task.policyId)?.application?.checklist.find(entry => `${task.policyId}-${entry.id}` === source.id)?.expects || [];
     const many = !review.unreadable && ((expects.length && review.missing.length * 2 > expects.length) || items.length >= 3);
     return file + differences + ai + (many ? serviceRec('material') : '');
@@ -1275,7 +1348,7 @@
     const tag = first ? '首选推荐' : { open: '正在申报', notice: '政策方向', closed: '已截止' }[status];
     const chosen = task.steps.match && task.policyId === policy.id;
     const keywords = [policy.supportType, policy.category, ...policy.industries.slice(0, 3)].filter(Boolean);
-    const facts = [['支持方向', policy.supportType], ['适用地区', policy.region], ['申报时间', windowText(policy)], ['发布日期', policy.publishedAt]];
+    const facts = [['政策类型', policy.supportType], ['适用地区', policy.region], ['申报时间', windowText(policy)], ['发布日期', policy.publishedAt]];
     const left = status === 'open' && policy.applicationStart <= today() || status === 'open' && !policy.applicationStart ? daysLeft(policy) : null;
     const scored = policyScore(task, policy);
     const side = scored ? `<span>匹配度</span><strong>${scored.level}</strong>` : left !== null ? `<span>距离截止</span><strong>${left}<small> 天</small></strong>` : `<span>申报状态</span><strong class="is-text">${{ open: '未开始', notice: '暂无窗口', closed: '已截止' }[status]}</strong>`;
@@ -1292,10 +1365,12 @@
     return `<article class="match-policy is-compact is-clickable is-${status}${first ? ' is-first' : ''}${chosen ? ' is-chosen' : ''}${scored}" data-type="${esc(policy.supportType || '')}"${typePick && policy.supportType !== typePick ? ' hidden' : ''}>${chosen ? `<span class="match-policy-check" role="img" aria-label="已选这项政策">${icon('check')}</span>` : ''}${scoreBadge(task, policy)}<p class="match-policy-tag">${tag}</p><h3><button type="button" class="match-policy-open" data-action="match-drawer" data-task="${esc(task.id)}" data-policy="${esc(policy.id)}">${esc(policy.title)}</button></h3><p class="match-policy-meta">${esc(policy.region)} · ${esc(windowText(policy))}</p><p class="match-policy-reason">${esc(reason)}</p>${viewButton(task, policy)}</article>`;
   }
 
-  /* 政策类型筛选：按政策的支持方向分，和“仅看进行中”可以叠加。 */
+  /* 政策类型筛选：按 MRD 的 7 类固定顺序排，只显示有政策的类型，和“仅看进行中”可以叠加。 */
+  const POLICY_TYPE_ORDER = ['税收优惠', '财政补贴', '融资支持', '稳岗就业', '降低成本', '资质荣誉', '其他'];
   let typePick = '';
   const typeFilter = matches => {
-    const types = [...new Set(matches.map(item => item.policy.supportType).filter(Boolean))];
+    const present = [...new Set(matches.map(item => item.policy.supportType).filter(Boolean))];
+    const types = [...POLICY_TYPE_ORDER.filter(type => present.includes(type)), ...present.filter(type => !POLICY_TYPE_ORDER.includes(type))];
     if (types.length < 2) return '';
     return `<div class="match-type-filter" role="group" aria-label="按政策类型筛选">${['', ...types].map(type => `<button type="button" class="nohit-chip" data-type-pick="${esc(type)}" aria-pressed="${typePick === type}">${type ? esc(type) : '全部类型'}</button>`).join('')}</div>`;
   };
@@ -1449,7 +1524,7 @@
     const regionHint = !facts.region || facts.region === '其他地区' ? `<p class="match-partial">补充所在地区，能看到地方政策。<button type="button" class="text-button" data-action="company-edit-inline" data-task="${esc(task.id)}">补充企业信息</button></p>` : '';
     const inlineCompany = companyInlineEditTasks.has(task.id);
     const noticeMarkup = inlineCompany ? companyInlineEdit(task, 'result') : (notFoundNotice(task) + regionHint) || partial;
-    const card = `<div class="intake-card match-result${onlyOpen ? ' only-open' : ''}">${noticeMarkup}<div class="match-result-bar"><p id="match-result-heading" class="match-result-heading" tabindex="-1">有 ${openCount} 项政策正在申报</p>${onlyOpenToggle()}</div>${typeFilter(matches)}<div class="match-policy-grid">${cards}</div>${diagnosisCard(task)}</div>`;
+    const card = `<div class="intake-card match-result${onlyOpen ? ' only-open' : ''}">${noticeMarkup}<div class="match-result-bar"><p id="match-result-heading" class="match-result-heading" tabindex="-1">有 ${openCount} 项政策正在申报</p>${onlyOpenToggle()}</div>${typeFilter(matches)}<div class="match-policy-grid">${cards}</div>${diagnosisCard(task)}${feedbackMarkup('match_result')}</div>`;
     // 少于 3 条时的追问并进结果卡片底部，一次只回一张卡片。
     return assistantBubble(`「${task.company.name}」比对完了。`, card + followupBubble(task, openCount, matches.map(item => item.policy), true), 'match');
   }
@@ -1616,7 +1691,7 @@
 
   function handleClick(target) {
     const { action } = target.dataset;
-    if (!['pick-suggest','guidance-prep','check-assign','policy-pick','policy-company-skip','policy-check-confirm','followup-submit','followup-skip','range-answer','copy-official','guidance-service','intake-confirm','service-dismiss','interpret-services-refresh','interpret-todo', 'interpret-apply', 'portrait-edit', 'portrait-cancel', 'portrait-save', 'company-edit-inline', 'company-edit-cancel', 'company-edit-save', 'home-intake-finish', 'intake-edit', 'intake-start', 'intake-remove-file', 'intake-result', 'match-chat', 'match-apply', 'match-drawer', 'match-drawer-close', 'nohit-pick', 'nohit-confirm', 'nohit-service', 'company-retry', 'interpret-retry', 'guidance-open'].includes(action)) return false;
+    if (!['pick-suggest','guidance-prep','check-assign','policy-pick','policy-company-skip','policy-check-confirm','followup-submit','followup-skip','range-answer','copy-official','guidance-service','intake-confirm','service-dismiss','interpret-services-refresh','interpret-todo', 'interpret-apply', 'portrait-edit', 'portrait-cancel', 'portrait-save', 'company-edit-inline', 'company-edit-cancel', 'company-edit-save', 'home-intake-finish', 'intake-edit', 'intake-start', 'intake-remove-file', 'intake-result', 'match-chat', 'match-apply', 'match-drawer', 'match-drawer-close', 'nohit-pick', 'nohit-confirm', 'nohit-service', 'company-retry', 'interpret-retry', 'guidance-open', 'regen-bubble'].includes(action)) return false;
     if (action === 'policy-pick') {
       pick.policyId = target.dataset.policy;
       window.PolicyUI.refresh();
@@ -1701,6 +1776,20 @@
       dismissedServices.add(target.dataset.kind);
       document.querySelectorAll(`.svc-section[data-service-kind="${target.dataset.kind}"]`).forEach(node => node.remove());
       window.PolicyUI.toast('本次对话不再推荐这类服务。');
+      return true;
+    }
+    if (action === 'regen-bubble') {
+      const body = target.closest('.chat-message-body');
+      if (!body || body.dataset.regening === '1') return true;
+      body.dataset.regening = '1';
+      try { const list = JSON.parse(localStorage.getItem(REGEN_STORE) || '[]'); list.push({ role: target.dataset.role || 'match', at: new Date().toISOString() }); localStorage.setItem(REGEN_STORE, JSON.stringify(list.slice(-200))); } catch {}
+      const kids = [...body.children].filter(node => !node.classList.contains('chat-message-name'));
+      kids.forEach(node => { node.hidden = true; });
+      const note = document.createElement('p');
+      note.className = 'chat-message chat-assistant chat-regen-pending';
+      note.textContent = '正在重新生成…';
+      body.append(note);
+      window.setTimeout(() => { note.remove(); kids.forEach(node => { node.hidden = false; }); delete body.dataset.regening; }, 800);
       return true;
     }
     if (action === 'match-drawer-close') { closeDrawer(); return true; }
