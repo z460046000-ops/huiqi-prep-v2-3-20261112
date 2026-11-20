@@ -68,7 +68,7 @@
   }
   const statusTag = policy => `<span class="policy-status status-${classifyWindow(policy)}">${esc(statuses[classifyWindow(policy)])}</span>`;
   function recommendationProfile() {
-    const fallback = {industry:'软件信息',support:'财政补贴',region:'',fromProject:false};
+    const fallback = {industry:'软件信息',support:'研发支持',region:'',fromProject:false};
     try {
       const raw=(localStorage.getItem('huiqi-policy-demo-v23') ?? localStorage.getItem('huiqi-policy-demo-v1'));
       if (!raw || raw.length > 5000000) return fallback;

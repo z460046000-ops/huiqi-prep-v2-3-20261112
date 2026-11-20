@@ -4,9 +4,6 @@
   const S = () => window.PolicyStore;
   const U = () => window.PolicyUI;
   const drafts = new Map();
-  // 内容安全（模拟开关 textBlocked）：被拦截的消息不进 task.messages（store 也会剥掉额外字段），
-  // 只记在本页，按发送时的位置插回对话；点“编辑重发”或刷新页面后消失。
-  const blockedMessages = new Map();
   const experts = {
     profile: { ...window.PolicyPersonas.get('profile'), subject: '企业档案', icon: 'building', prompts: ['企业档案还缺什么？', '哪些资料已经提供？'], placeholder: '补充企业情况，或问问档案还缺什么……' },
     match: { ...window.PolicyPersonas.get('match'), subject: '政策匹配', icon: 'search', prompts: ['为什么匹配这个政策？', '申报条件是什么？'], placeholder: '问问匹配原因、政策条件或适用范围……' },
@@ -230,11 +227,6 @@
       const generate=label=>`<label class="prep-alt-link"><span>${label}</span>${I('chevron')}<input type="file" multiple data-source-generate ${attrs} accept="${accept}" aria-label="批量选择零散资料，AI 生成${E(item.label)}"></label>`;
       let body='';
       if(count)body=`<div class="prep-busy" role="status"><span class="prep-spinner" aria-hidden="true"></span><div><strong>AI 正在生成《${E(item.label)}》</strong><small>正在从 ${count} 份资料里提取内容</small></div></div>`;
-      // 内容安全（模拟开关）：被拦截的资料只显示文件名和“未通过审核”，没有 AI 建议，只有重新上传、删除。
-      else if(source&&!source.provided&&window.PolicyMatch?.isSourceBlocked(task.id,source.id)){
-        const fileName=source.fileName||'未命名文件';
-        body=`<div class="prep-file is-blocked"><span class="prep-file-blocked-icon" aria-hidden="true">${I('ban')}</span><div class="prep-file-text"><div class="prep-blocked-name"><strong title="${E(fileName)}">${E(fileName)}</strong><span class="blocked-tag">未通过审核</span></div></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div><p class="prep-blocked-note">内容未通过安全审核，未做解析，也不会用于申报材料。</p>`;
-      }
       else if(ready){
         const fileName=source.fileName||`${item.label}.doc`;
         body=`<div class="prep-file"><span class="prep-file-icon" aria-hidden="true">${I('file')}</span><div class="prep-file-text"><strong title="${E(fileName)}">${E(fileName)}</strong></div><div class="prep-file-actions"><button type="button" class="text-button prep-file-delete" data-action="material-delete" ${attrs}>删除</button><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept="${accept}" aria-label="重新上传${E(item.label)}"></label></div></div>${adviceMarkup(task,source,attrs,advice)}`;
@@ -348,10 +340,6 @@
         : `<span class="chat-message-avatar chat-message-expert-avatar" aria-hidden="true" style="--portrait-x:${author.x}%;--portrait-y:${author.y}%"></span>`;
       return `<div class="chat-message-row ${isUser ? 'is-user' : 'is-assistant'}">${avatar}<div class="chat-message-body"><span class="chat-message-name">${isUser ? '企业负责人' : E(author.name)}</span><p class="chat-message chat-${message.role}${context ? ' chat-context' : ''}">${E(message.text)}</p></div></div>`;
     };
-    // 被拦截的消息按发送位置插回对话：气泡换成拦截样式，下方给“编辑重发”。
-    const blockedThread = [...messages];
-    (blockedMessages.get(keyFor(task.id, workId)) || []).slice().sort((a, b) => a.atIndex - b.atIndex).forEach(entry => blockedThread.splice(Math.min(entry.atIndex, blockedThread.length), 0, entry));
-    const blockedHtml = entry => `<div class="chat-message-row is-user"><span class="chat-message-avatar chat-message-user-avatar" aria-hidden="true">企</span><div class="chat-message-body"><span class="chat-message-name">企业负责人</span><p class="chat-message chat-user is-blocked">${E(entry.text)}</p><p class="chat-blocked-note"><span class="chat-blocked-mark" aria-hidden="true">${I('warn-circle')}</span>这条消息含有不合规内容，未发送。请修改后重新发送。<button type="button" class="chat-blocked-edit" data-action="chat-blocked-edit" data-task="${E(task.id)}" data-work="${workId}" data-blocked-id="${E(entry.id)}">编辑重发</button></p></div></div>`;
     const statusLabel = options?.statusLabel ? `<span class="chat-expert-status">${E(options.statusLabel)}</span>` : '';
     // 申报辅助还没选政策：先选，选好才知道要备哪些材料。
     const choosingPolicy=workId==='assembly'&&!task.steps.match&&!versionsFor(task).length;
@@ -378,7 +366,7 @@
     const currentTaskBubble=collecting||interpreting||prepOnly?'':noPolicyGuide?consultationMarkup(task,workId,{...action,detail:answer(task,'',workId),multiline:true}):needsPolicy?consultationMarkup(task,workId,{route:'task',work:'match',label:'去选政策',detail:'选定要申报的政策后，我就能开始。没选之前可以先问我。'}):['profile','match','diagnosis','assembly','review'].includes(workId)?confirmationMarkup(task,workId):consultationMarkup(task,workId,action);
     return `<section class="adviser-card${collecting?(workId==='interpret'?' is-picking':' has-intake'):''}" data-chat-task="${E(task.id)}" data-chat-work="${workId}" aria-label="${E(expert.name)}对话">
       <header><span class="role-avatar chat-expert-avatar" aria-hidden="true" style="--portrait-x:${expert.x}%;--portrait-y:${expert.y}%"></span><div class="chat-header-identity"><h2>${E(expert.name)}</h2><div class="chat-expert-meta"><span class="muted chat-expert-subject">${expert.doing ? `正在帮你${E(expert.doing)}` : E(expert.can)}</span>${statusLabel}</div></div></header>
-      <div class="chat-scroll-region" tabindex="0" aria-label="对话记录"><div class="chat-messages" aria-live="polite">${transcript}${policyNote}${intake || (prep || noPolicyGuide ? '' : messageHtml({ role: 'assistant', text: answer(task, '', workId), workId }, true))}${window.PolicyMatch?.uploadsMarkup(task,workId)||''}${prep}${prep&&!prepOnly&&workId==='assembly'&&currentTaskBubble?window.PolicyMatch.userBubble('材料传好了'):''}${currentTaskBubble}${blockedThread.map(entry => entry.role ? messageHtml(entry) : blockedHtml(entry)).join('')}</div>
+      <div class="chat-scroll-region" tabindex="0" aria-label="对话记录"><div class="chat-messages" aria-live="polite">${transcript}${policyNote}${intake || (prep || noPolicyGuide ? '' : messageHtml({ role: 'assistant', text: answer(task, '', workId), workId }, true))}${window.PolicyMatch?.uploadsMarkup(task,workId)||''}${prep}${prep&&!prepOnly&&workId==='assembly'&&currentTaskBubble?window.PolicyMatch.userBubble('材料传好了'):''}${currentTaskBubble}${messages.map(message => messageHtml(message)).join('')}</div>
         ${history.length ? `<details class="chat-project-history"><summary>项目历史对话 <span>${history.length} 条</span></summary><div class="chat-messages">${history.map(message => messageHtml(message)).join('')}</div></details>` : ''}
       </div>
       <div class="chat-composer"><div class="chat-suggestions">${expert.prompts.map(prompt => `<button data-action="chat-prompt" data-task="${E(task.id)}" data-work="${workId}" data-prompt="${E(prompt)}">${E(prompt.replace(/[？?]$/, ''))}</button>`).join('')}</div>
@@ -451,16 +439,8 @@
     const value = typeof message === 'string' ? message.trim().slice(0, 2000) : '';
     if (!task || !value) return;
     const expertId = experts[workId].id;
-    // 内容安全（模拟开关 textBlocked）：消息被拦截，只显示在对话里，不进上下文，也不生成回复（PRD 6.3 第 24 条）。
-    const blocked = window.PolicySim?.on('textBlocked');
-    const saved = blocked || S().updateTask(task.id, { selectedWorkId: workId, messages: [...(task.messages || []), { role: 'user', text: value, workId, expertId }, { role: 'assistant', text: answer(task, value, workId, checkScope), workId, expertId }] });
+    const saved = S().updateTask(task.id, { selectedWorkId: workId, messages: [...(task.messages || []), { role: 'user', text: value, workId, expertId }, { role: 'assistant', text: answer(task, value, workId, checkScope), workId, expertId }] });
     if (!saved) { U().toast('对话未能保存，请重试。'); return; }
-    if (blocked) {
-      const key = keyFor(task.id, workId);
-      const list = blockedMessages.get(key) || [];
-      list.push({ id: `blk-${Date.now().toString(36)}-${list.length}`, text: value, atIndex: (task.messages || []).filter(item => validWork(item.workId) === workId).length });
-      blockedMessages.set(key, list);
-    }
     const input = document.querySelector('#adviser-message');
     if (input?.closest('form')?.dataset.task === task.id && validWork(input.closest('form').dataset.work) === workId) input.value = '';
     drafts.delete(keyFor(task.id, workId));
@@ -481,24 +461,9 @@
     event.preventDefault();
     event.target.form?.requestSubmit();
   });
-  // 编辑重发：原文回到输入框末尾，被拦截的消息从对话里移除。
-  document.addEventListener('click', event => {
-    const target = event.target instanceof Element ? event.target.closest('[data-action="chat-blocked-edit"]') : null;
-    if (!target) return;
-    const key = keyFor(target.dataset.task, validWork(target.dataset.work));
-    const list = blockedMessages.get(key) || [];
-    const entry = list.find(item => item.id === target.dataset.blockedId);
-    if (!entry) return;
-    blockedMessages.set(key, list.filter(item => item.id !== entry.id));
-    const before = document.querySelector('#adviser-message');
-    if (before) { before.value = entry.text; before.dispatchEvent(new Event('input', { bubbles: true })); }
-    U().refresh();
-    const input = document.querySelector('#adviser-message');
-    if (input) { input.focus({ preventScroll: true }); input.setSelectionRange(input.value.length, input.value.length); }
-  });
   window.PolicyChat = Object.freeze({ uploadRow, adviceMarkup, materialCard, prepSections, render, captureView, restoreView, answerFor: answer,
     forgetTask(taskId) {
-      for (const map of [drafts, blockedMessages]) {
+      for (const map of [drafts]) {
         for (const key of map.keys()) if(key.startsWith(`${taskId}:`)) map.delete(key);
       }
     },

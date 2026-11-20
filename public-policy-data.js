@@ -5,7 +5,7 @@
     {
       id: 'zj-tech-sme-2026', projectId: 'zj-tech-sme', batchId: 'binjiang-2026',
       title: '2026年度浙江省科技型中小企业申报通知',
-      region: '杭州市', industries: ['软件信息', '先进制造', '新能源', '生命健康', '现代服务'], supportType: '资质荣誉',
+      region: '杭州市', industries: ['软件信息', '先进制造', '新能源', '生命健康', '现代服务'], supportType: '资质培育',
       publishedAt: '2026-04-23', applicationStart: null, applicationEnd: '2026-10-31', deadlineOnly: true,
       category: '申报通知', agency: '杭州高新区（滨江）科技局',
       sourceUrl: 'https://www.hhtz.gov.cn/col/col1485818/art/2026/art_11ec09ec4a6e4be6adee68e40d0b6ad4.html',
@@ -17,7 +17,7 @@
     {
       id: 'gd-ai-2027', projectId: 'gd-ai-rd', batchId: '2027',
       title: '2027年度广东省重点领域研发计划“人工智能”专项申报通知',
-      region: '广东省', industries: ['软件信息', '先进制造'], supportType: '财政补贴',
+      region: '广东省', industries: ['软件信息', '先进制造'], supportType: '研发支持',
       publishedAt: '2026-09-10', applicationStart: '2026-09-04', applicationEnd: '2026-10-05',
       deadlineAt: '2026-10-05T17:00:00+08:00', category: '申报通知', agency: '深圳市科技创新局',
       sourceUrl: 'https://stic.sz.gov.cn/gkmlpt/content/12/12975/post_12975014.html',
@@ -29,7 +29,7 @@
     {
       id: 'cn-tech-commerce-2026', projectId: 'cn-tech-commerce', batchId: '2026-551',
       title: '商务部等9部门关于加快推进科技兴商的意见',
-      region: '全国', industries: ['软件信息', '先进制造', '现代服务'], supportType: '其他',
+      region: '全国', industries: ['软件信息', '先进制造', '现代服务'], supportType: '数字化改造',
       publishedAt: '2026-10-19', issuedAt: '2026-10-13', applicationStart: null, applicationEnd: null,
       category: '政策公告', agency: '商务部等9部门',
       sourceUrl: 'https://www.mofcom.gov.cn/zwgk/zcfb/art/2026/art_787f0441da1f4c0e8b5bad10118247f3.html',
@@ -39,7 +39,7 @@
     {
       id: 'cn-logistics-2026', projectId: 'cn-logistics-leaders', batchId: '2026-4',
       title: '加快培育交通物流领军企业、提升产业链供应链服务保障能力行动方案',
-      region: '全国', industries: ['现代服务', '软件信息'], supportType: '其他',
+      region: '全国', industries: ['现代服务', '软件信息'], supportType: '数字化改造',
       publishedAt: '2026-01-21', issuedAt: '2026-01-16', applicationStart: null, applicationEnd: null,
       category: '政策公告', agency: '交通运输部等8部门',
       sourceUrl: 'https://xxgk.mot.gov.cn/jigou/ysfws/202601/t20260121_4198258.html',
@@ -49,7 +49,7 @@
     {
       id: 'cn-finance-2025', projectId: 'cn-finance-five-areas', batchId: '2025-8',
       title: '国务院办公厅关于做好金融“五篇大文章”的指导意见',
-      region: '全国', industries: ['软件信息', '先进制造', '新能源', '生命健康', '现代服务'], supportType: '融资支持',
+      region: '全国', industries: ['软件信息', '先进制造', '新能源', '生命健康', '现代服务'], supportType: '金融支持',
       publishedAt: '2025-03-05', issuedAt: '2025-03-02', applicationStart: null, applicationEnd: null,
       category: '政策公告', agency: '国务院办公厅',
       sourceUrl: 'https://app.www.gov.cn/govdata/gov/202503/05/525163/article.html',
@@ -59,7 +59,7 @@
     {
       id: 'sh-smart-grid-2026', projectId: 'national-smart-grid', batchId: '2026-open-call',
       title: '智能电网国家科技重大专项专题攻关公开项目申报通知',
-      region: '上海市', industries: ['新能源', '软件信息'], supportType: '财政补贴',
+      region: '上海市', industries: ['新能源', '软件信息'], supportType: '研发支持',
       publishedAt: '2026-10-28', issuedAt: '2026-10-26', applicationStart: '2026-10-28', applicationEnd: '2026-12-07',
       category: '申报通知', agency: '上海市科学技术委员会',
       sourceUrl: 'https://stcsm.sh.gov.cn/zwgk/kyjhxm/xmsb/20261028/c956023f49094f1a939b92ada9a8d61e.html',
@@ -88,7 +88,7 @@
     {
       id: 'bj-zjw-scenarios-2026', projectId: 'bj-zjw-scenarios', batchId: '2026-432',
       title: '北京市住房城乡建设领域创新应用场景征集',
-      region: '北京市', industries: ['软件信息', '先进制造'], supportType: '资质荣誉',
+      region: '北京市', industries: ['软件信息', '先进制造'], supportType: '应用推广',
       publishedAt: '2026-09-09', issuedAt: '2026-09-02', applicationStart: null, applicationEnd: '2026-11-20',
       deadlineAt: '2026-11-20T17:00:00+08:00', category: '申报通知', agency: '北京市住房和城乡建设委员会',
       sourceUrl: 'https://zjw.beijing.gov.cn/bjjs/kjcxytg/znjz/zjtz76/744118225/index.shtml',
@@ -119,7 +119,7 @@
     {
       id: 'bj-application-scenarios-2026', projectId: 'bj-application-scenarios', batchId: '2026-second',
       title: '2026年第二批重点应用场景储备项目征集通知',
-      region: '北京市', industries: ['软件信息', '生命健康'], supportType: '资质荣誉',
+      region: '北京市', industries: ['软件信息', '生命健康'], supportType: '研发支持',
       publishedAt: '2026-10-28', applicationStart: '2026-10-29', applicationEnd: '2026-11-17',
       applicationStartAt: '2026-10-29T09:00:00+08:00', deadlineAt: '2026-11-17T18:00:00+08:00',
       category: '申报通知', agency: '北京市科委、中关村管委会',
@@ -153,7 +153,7 @@
       id: 'sz-ai-corpus-voucher-2026', projectId: 'sz-ai-corpus-voucher', batchId: '2026',
       title: '2026年深圳市人工智能语料券专项资金',
       subsidy: { prefix: '最高', value: '200', unit: '万' },
-      region: '深圳市', industries: ['软件信息'], supportType: '财政补贴',
+      region: '深圳市', industries: ['软件信息'], supportType: '研发支持',
       publishedAt: '2026-03-31', applicationStart: '2026-09-01', applicationEnd: '2026-11-10',
       deadlineAt: '2026-11-10T18:00:00+08:00', category: '申报通知', agency: '深圳市政务服务和数据管理局',
       sourceUrl: 'https://www.sz.gov.cn/szzsj/gkmlpt/content/12/12712/mpost_12712533.html',
@@ -195,7 +195,7 @@
       title: '《先进技术产品转化应用目录（2026年度）》技术产品征集',
       // 原文写“11月23日前”，没写具体时刻，截止时间按“以原文为准”展示；材料清单要在采集系统里看，模板没有收进库表。
       confidence: { applicationEnd: 'mid' },
-      region: '北京市', industries: ['软件信息', '先进制造', '生命健康'], supportType: '资质荣誉',
+      region: '北京市', industries: ['软件信息', '先进制造', '生命健康'], supportType: '应用推广',
       publishedAt: '2026-10-09', applicationStart: null, applicationEnd: '2026-11-23',
       category: '申报通知', agency: '北京市经济和信息化局',
       sourceUrl: 'https://www.beijing.gov.cn/zhengce/zhengcefagui/202610/t20261009_4895135.html',
@@ -258,7 +258,7 @@
     {
       id: 'bj-ai4chip-2026', projectId: 'bj-ai4chip', batchId: '2026',
       title: '北京经济技术开发区AI4Chip人工智能赋能集成电路项目征集',
-      region: '北京市', industries: ['先进制造'], supportType: '财政补贴',
+      region: '北京市', industries: ['先进制造'], supportType: '研发支持',
       publishedAt: '2026-11-09', issuedAt: '2026-11-05', applicationStart: null, applicationEnd: '2026-11-20',
       category: '申报通知', agency: '北京市集成电路重大项目办公室',
       sourceUrl: 'https://www.beijing.gov.cn/zhengce/zhengcefagui/202611/t20261109_4939036.html',
@@ -286,7 +286,7 @@
     {
       id: 'bj-hitech-2026', projectId: 'bj-hitech', batchId: '2026',
       title: '2026年度北京市高新技术企业认定',
-      region: '北京市', industries: ['软件信息', '先进制造', '新能源', '生命健康', '现代服务'], supportType: '资质荣誉',
+      region: '北京市', industries: ['软件信息', '先进制造', '新能源', '生命健康', '现代服务'], supportType: '资质培育',
       publishedAt: '2026-08-31', applicationStart: null, applicationEnd: '2026-09-24',
       category: '申报通知', agency: '北京市科委、中关村管委会',
       sourceUrl: 'https://kw.beijing.gov.cn/zwgk/zcwj/202608/t20260831_4844387.html',

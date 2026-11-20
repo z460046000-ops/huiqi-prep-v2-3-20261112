@@ -1,4 +1,4 @@
-/* 异常场景：PRD V2.3 6.3 的 24 个异常和分支，每个一键进入。
+/* 异常场景：PRD V2.3 6.3 的 23 个异常和分支，每个一键进入。
    企业和政策都是核对过公开来源的真实数据；真实数据触发不了的，用模拟开关（sim.js）。 */
 (() => {
   'use strict';
@@ -108,18 +108,16 @@
     { n: 19, stage: '办理', title: '未选政策就进入办理指引', how: '久其金建还没选政策就打开办理指引，给通用流程和“先选政策”入口。', run: async () => { const task = S().createTask({ title: `${JINJIAN} · 政策申报`, request: '查看办理指引。', company: { name: JINJIAN, ...M().apiProfile(JINJIAN) }, intake: { stage: 'ready', answers: { type: '有限责任公司' }, files: [] } }); location.hash = `#task?task=${encodeURIComponent(task.id)}&work=guidance`; await sleep(1200); } },
     { n: 20, sub: '读不出文字', stage: '申报', title: '文件读不出文字', how: '进入住建场景征集的材料整理，上传一张图片或扫描版 PDF，会如实提示读不出。', run: async () => { const id = await mk(JINJIAN, FULL); await choosePolicy('bj-zjw-scenarios-2026'); location.hash = `#task?task=${encodeURIComponent(id)}&work=assembly`; await focus('[data-source-upload]'); } },
     { n: 20, sub: '上传失败', stage: '申报', title: '文件上传失败', how: '真实上传故障无法复现，用模拟开关。进入材料整理后上传任意文件，提示重试。', sims: ['uploadFail'], run: async () => { const id = await mk(JINJIAN, FULL); await choosePolicy('bj-zjw-scenarios-2026'); location.hash = `#task?task=${encodeURIComponent(id)}&work=assembly`; await focus('[data-source-upload]'); } },
-    { n: 21, stage: '解读', title: '白话解读生成失败', how: '模型故障无法复现，用模拟开关。隐藏白话摘要模块，其余要素照常显示。', sims: ['interpretFail'], run: async () => { await mk(JINJIAN, FULL); await openPolicy('bj-zjw-scenarios-2026'); await focus('#match-drawer .interpret-summary'); } },
+    { n: 21, stage: '解读', title: '白话解读生成失败', how: '模型故障无法复现，用模拟开关。退回展示原文提取的字段。', sims: ['interpretFail'], run: async () => { await mk(JINJIAN, FULL); await openPolicy('bj-zjw-scenarios-2026'); await focus('#match-drawer .interpret-summary'); } },
     { n: 22, stage: '账号', title: '未登录', how: '用模拟开关。先登录，登录后回到原页面。', sims: ['loggedOut'], run: async () => { location.hash = '#dashboard?work=interpret'; window.PolicyUI.refresh(); } },
     { n: 23, stage: '材料库', title: '没有材料版本', how: '上海久其软件有限公司还没有确认过材料版本，引导去整理申报材料。', run: async () => { location.hash = `#library?company=${encodeURIComponent('上海久其软件有限公司')}`; } },
-    { n: 24, sub: '文本', stage: '内容安全', title: '对话内容未通过审核', how: '内容审核结果无法用真实数据复现，用模拟开关。进入住建场景征集的申报辅助对话，发送任意一句话，消息会被拦截并提示修改后重发。', sims: ['textBlocked'], run: async () => { const id = await mk(JINJIAN, FULL); await choosePolicy('bj-zjw-scenarios-2026'); location.hash = `#task?task=${encodeURIComponent(id)}&work=assembly`; await focus('#adviser-message'); } },
-    { n: 24, sub: '文件/图片', stage: '内容安全', title: '上传内容未通过审核', how: '内容审核结果无法用真实数据复现，用模拟开关。进入住建场景征集的材料整理，上传任意文件或图片，显示“未通过审核”，不解析。', sims: ['fileBlocked'], run: async () => { const id = await mk(JINJIAN, FULL); await choosePolicy('bj-zjw-scenarios-2026'); location.hash = `#task?task=${encodeURIComponent(id)}&work=assembly`; await focus('[data-source-upload]'); } },
   ];
 
   function render() {
     const Sim = window.PolicySim;
     const toggles = Object.entries(Sim.LABELS).map(([key, label]) => `<label class="scenario-toggle"><input type="checkbox" data-sim="${key}"${Sim.on(key) ? ' checked' : ''}><span>${E(label)}</span></label>`).join('');
     const rows = items.map((item, index) => `<li class="scenario-row"><span class="scenario-no">${item.n}</span><div class="scenario-main"><p class="scenario-stage">${E(item.stage)}${item.sims ? '<em class="scenario-sim">模拟开关</em>' : ''}</p><h3>${E(item.title)}</h3><p>${E(item.how)}</p></div><button type="button" class="button button-secondary" data-action="scenario-run" data-index="${index}">进入</button></li>`).join('');
-    return `<div class="scenario-page"><header class="scenario-head"><p class="scenario-demo-tag">演示用，正式版不含此页</p><h1>异常场景</h1><p>主流程之外的 24 种情况，点“进入”直接查看。企业和政策都是真实的；真实数据触发不了的系统故障用模拟开关。</p></header><section class="scenario-sims" aria-labelledby="sim-title"><h2 id="sim-title">模拟开关</h2><p>打开后对所有页面生效，用完记得关掉。进入带“模拟开关”标记的场景时会自动打开对应开关。</p><div class="scenario-toggles">${toggles}</div></section><ol class="scenario-list">${rows}</ol></div>`;
+    return `<div class="scenario-page"><header class="scenario-head"><p class="scenario-demo-tag">演示用，正式版不含此页</p><h1>异常场景</h1><p>主流程之外的 23 种情况，点“进入”直接查看。企业和政策都是真实的；真实数据触发不了的系统故障用模拟开关。</p></header><section class="scenario-sims" aria-labelledby="sim-title"><h2 id="sim-title">模拟开关</h2><p>打开后对所有页面生效，用完记得关掉。进入带“模拟开关”标记的场景时会自动打开对应开关。</p><div class="scenario-toggles">${toggles}</div></section><ol class="scenario-list">${rows}</ol></div>`;
   }
 
   document.addEventListener('change', event => {

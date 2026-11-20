@@ -614,28 +614,3 @@
 .conf-tag.is-low{background:#fff3df;color:#b45309}
 
 .match-only-open{flex:none;white-space:nowrap}
-
-/* V2.4：「以原文为准 / 待确认 / 见政策原文」链到政策原文 */
-a.conf-tag.is-link{text-decoration:underline;text-underline-offset:3px}
-a.conf-tag.is-link:hover{opacity:.85}
-.conf-link{color:inherit;text-decoration:underline;text-decoration-color:#a6b8d8;text-underline-offset:3px}
-.conf-link:hover{color:#1f5fd6}
-
-/* V2.4：AI 结果的点赞 / 点踩反馈 */
-.feedback-row{display:flex;align-items:center;gap:2px;margin-top:12px;padding-top:10px;border-top:1px dashed #dfe5ee;font-size:12px;color:#8a95a5}
-.feedback-ask{margin-right:6px}
-.feedback-vote{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;color:#8a95a5;transition:background .15s,color .15s}
-.feedback-vote .icon{width:15px;height:15px}
-.feedback-vote:hover{color:#1f5fd6;background:#eef4ff}
-.feedback-vote.is-on{color:#1f5fd6;background:#eef4ff}
-.feedback-reasons{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#8a95a5}
-.feedback-reason{padding:3px 10px;border:1px solid #d6dfeb;border-radius:999px;background:#fff;color:#5b6879;font-size:12px;transition:border-color .15s,color .15s}
-.feedback-reason:hover{border-color:#1f5fd6;color:#1f5fd6}
-.review-ai .feedback-row{margin:8px 14px 12px;border-top:0;padding-top:0}
-
-/* V2.4：助手气泡的「重新生成」 */
-.chat-regen{margin-top:2px}
-.chat-regen-button{min-height:26px;padding:2px 0;font-size:12px;color:#98a2b0}
-.chat-regen-button .icon{width:13px;height:13px}
-.chat-regen-button:hover{color:#1f5fd6}
-.chat-regen-pending{color:#8a95a5}

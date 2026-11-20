@@ -61,7 +61,6 @@
     }
     indexPositions.delete(taskId);
     window.PolicyChat.forgetTask(taskId);
-    window.PolicyMatch?.forgetBlockedSources(taskId);
     M.forgetTask(taskId);
     W.leave(taskId);
   }
@@ -85,7 +84,6 @@
     route:'M5 4h14v5H5zM12 9v6M4 20h16M4 20v-5h16v5M12 15v5',
     menu:'M4 6h16M4 12h16M4 18h16', close:'m6 6 12 12M6 18 18 6', clock:'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
     download:'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5', alert:'M12 8v5m0 4h.01M12 3 2 21h20L12 3Z',
-    'warn-circle':'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 7.5v5M12 16.5h.01', ban:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM5.6 5.6l12.8 12.8',
     trash:'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7',
     'step-match':'M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Zm5-2 5 5M8 11l2 2 4-4',
     'step-read':'M12 6C10 4.5 7 4 3 4v15c4 0 7 .5 9 2 2-1.5 5-2 9-2V4c-4 0-7 .5-9 2Zm0 0v15M6.5 9H9m-2.5 4H9m6-4h2.5M15 13h2.5',
@@ -248,7 +246,7 @@
     sidebar();
     B.syncSelection();
     window.PolicyHomeFeed?.mount();
-    document.title = '惠企政策智能体V2.4';
+    document.title = '企政策智能体V2.3';
     restoreFormDraft();
     const documentContent=page.querySelector('.workspace-content');
     if(documentContent)documentContent.scrollTop=documentPositions.get(nextDocumentKey) || 0;
@@ -356,15 +354,6 @@
       render();
       return;
     }
-    if (target.dataset.action==='home-fill-company') {
-      const input=page.querySelector('#start-company-name');
-      if (input) {
-        input.value=target.dataset.name;
-        input.dispatchEvent(new Event('input',{bubbles:true}));
-        input.focus();
-      }
-      return;
-    }
     if (target.dataset.action==='home-start-focus') {
       const input=page.querySelector('#start-company-name');
       input?.scrollIntoView({block:'center',behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
@@ -459,7 +448,6 @@
       const sourceId=target.dataset.source,source=task.sources.find(item=>item.id===sourceId);
       if(!source || !window.confirm(`删除《${source.name}》？删除后需要重新上传或生成。`))return;
       if(!updateSource(task,sourceId,'')){toast('未能删除，请重试。');return;}
-      window.PolicyMatch.clearSourceBlocked(task.id,sourceId);
       window.PolicyMatch.forgetUpload(task.id,sourceId);
       M.forgetFile(task.id,sourceId);
       window.PolicyMatch.closeDrawer();
@@ -491,7 +479,6 @@
     if (target.matches('[data-source-generate]')) {
       const taskId=target.dataset.task,sourceId=target.dataset.source,files=Array.from(target.files || []);
       if(!S.getTask(taskId) || !files.length)return;
-      window.PolicyMatch?.clearSourceBlocked(taskId,sourceId);
       window.PolicyMatch?.closeDrawer();M.generateMaterial(taskId,sourceId,files,(text,label)=>updateSource(S.getTask(taskId),sourceId,text,'generated',`${label}.doc`));
       return;
     }
@@ -509,17 +496,6 @@
       if(!S.getTask(taskId) || !file)return;
       // 上传失败（模拟开关）：不保存，已生成的内容不受影响（PRD 6.3 第 20 条）。
       if(window.PolicySim?.on('uploadFail')){target.value='';toast('上传失败，请重试。已生成的内容不受影响。');return;}
-      // 内容安全（模拟开关）：不读文件、不解析，资料保存为被拦截状态；blocked 标记记在 match.js 的本页名单里（PRD 6.3 第 24 条）。
-      if(window.PolicySim?.on('fileBlocked')){
-        target.value='';
-        if(!updateSource(S.getTask(taskId),sourceId,'','',file.name)){toast('资料未能保存，请重试。');return;}
-        window.PolicyMatch?.markSourceBlocked(taskId,sourceId);
-        render();
-        window.PolicyMatch?.refreshMaterialReview(S.getTask(taskId),sourceId);
-        toast(`《${file.name}》未通过内容安全审核，已停止解析。请检查内容后重新上传。`);
-        return;
-      }
-      window.PolicyMatch?.clearSourceBlocked(taskId,sourceId);
       window.PolicyMatch?.rememberUpload(file,taskId,'assembly',sourceId);
       M.rememberFile(taskId,sourceId,file);
       // 能读出文字就存原文用于解析；读不出的只记文件名，并在解析里说明。
