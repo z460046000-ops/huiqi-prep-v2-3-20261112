@@ -146,11 +146,12 @@
   /* ---------- 对话里的资料收集 ---------- */
   const intakeActive = task => Boolean(task?.intake) && task.intake.stage !== 'ready';
 
-  /* V2.4：助手气泡底部带“重新生成”；点击后原地显示“正在重新生成…”，800ms 后按原内容重渲（原型没有模型，内容不变）。 */
-  function assistantBubble(text, card = '', role = 'match') {
+  /* V2.4：只有 AI 生成结果的气泡（匹配结果、追问回答、材料 AI 建议 / 核对结果、办理指引）底部带“重新生成”；引导、确认类气泡不带。
+     点击后原地显示“正在重新生成…”，800ms 后按原内容重渲（原型没有模型，内容不变）。 */
+  function assistantBubble(text, card = '', role = 'match', regen = false) {
     const person = window.PolicyPersonas.get(role);
-    const regen = `<div class="chat-regen"><button type="button" class="text-button chat-regen-button" data-action="regen-bubble" data-role="${esc(role)}">${icon('refresh')}重新生成</button></div>`;
-    return `<div class="chat-message-row is-assistant"><span class="chat-message-avatar chat-message-expert-avatar" aria-hidden="true" style="--portrait-x:${person.x}%;--portrait-y:${person.y}%"></span><div class="chat-message-body intake-body"><span class="chat-message-name">${esc(person.name)}</span>${card ? `<div class="chat-message chat-assistant has-card"><p class="chat-bubble-lead">${esc(text)}</p>${card}</div>` : `<p class="chat-message chat-assistant">${esc(text)}</p>`}${regen}</div></div>`;
+    const regenMarkup = regen ? `<div class="chat-regen"><button type="button" class="text-button chat-regen-button" data-action="regen-bubble" data-role="${esc(role)}">${icon('refresh')}重新生成</button></div>` : '';
+    return `<div class="chat-message-row is-assistant"><span class="chat-message-avatar chat-message-expert-avatar" aria-hidden="true" style="--portrait-x:${person.x}%;--portrait-y:${person.y}%"></span><div class="chat-message-body intake-body"><span class="chat-message-name">${esc(person.name)}</span>${card ? `<div class="chat-message chat-assistant has-card"><p class="chat-bubble-lead">${esc(text)}</p>${card}</div>` : `<p class="chat-message chat-assistant">${esc(text)}</p>`}${regenMarkup}</div></div>`;
   }
 
   function userBubble(text) {
@@ -279,7 +280,7 @@
     if (hasNoTemplate(open)) {
       const items = open.application.checklist.filter(item => item.kind !== 'condition');
       const row = `<ol class="guidance-list"><li><button type="button" class="guidance-step" data-route="guidance" data-task="${esc(task.id)}" data-work="guidance"><span class="guidance-step-number">1</span><span class="guidance-step-copy"><strong>材料清单和办理步骤</strong><small>共 ${items.length} 项材料，${esc(submit.name)}，${esc(dueText)}</small></span>${icon('arrow')}</button></li></ol>`;
-      return assistantBubble('这项政策没有申报模板，不生成初稿。按材料清单准备后，到官方系统办理。', `${row}${feedbackMarkup('guide', open?.id || policy.id)}`, 'guidance');
+      return assistantBubble('这项政策没有申报模板，不生成初稿。按材料清单准备后，到官方系统办理。', `${row}${feedbackMarkup('guide', open?.id || policy.id)}`, 'guidance', true);
     }
     const rows = [
       // V2.3：从“核对并提交”进来的任务，材料核对结果在上面的核对卡里，这一步直接引用它。
@@ -288,14 +289,14 @@
       { title: submit?.email ? '发邮件报送' : '到官方系统提交', detail: submit ? `${submit.name}，${dueText}` : '按政策指定的官方渠道办理', attrs: 'data-route="guidance"', state: '' },
     ];
     const card = `<ol class="guidance-list">${rows.map((row, index) => `<li><button type="button" class="guidance-step" ${row.attrs} data-task="${esc(task.id)}" data-work="${row.work || 'guidance'}"><span class="guidance-step-number">${index + 1}</span><span class="guidance-step-copy"><strong>${esc(row.title)}</strong><small>${esc(row.detail)}</small></span>${row.state ? `<span class="guidance-step-state${row.done ? ' is-done' : ''}">${esc(row.state)}</span>` : ''}${icon('arrow')}</button></li>`).join('')}</ol>${feedbackMarkup('guide', open?.id || policy.id)}`;
-    return assistantBubble(`接下来这样办，点开每一步看详情。`, card, 'guidance');
+    return assistantBubble(`接下来这样办，点开每一步看详情。`, card, 'guidance', true);
   }
 
   /* 申报辅助里选到没有模板的政策：不生成初稿，转到办理指引。 */
   function noTemplateNotice(task) {
     const policy = publicPolicies().find(item => item.id === task.policyId);
     if (!task.steps.match || !hasNoTemplate(policy)) return '';
-    return assistantBubble('这项政策没有申报模板，不生成初稿。材料清单和办理步骤都在办理指引里。', `<div class="intake-foot is-end prep-no-template"><button type="button" class="button button-primary" data-route="task" data-task="${esc(task.id)}" data-work="guidance">查看办理指引 ${icon('arrow')}</button></div>`, 'assembly');
+    return assistantBubble('这项政策没有申报模板，不生成初稿。材料清单和办理步骤都在办理指引里。', `<div class="intake-foot is-end prep-no-template"><button type="button" class="button button-primary" data-route="task" data-task="${esc(task.id)}" data-work="guidance">查看办理指引 ${icon('arrow')}</button></div>`, 'assembly', true);
   }
 
   /* 打开材料时按这版内容重新估一次成功率。 */
@@ -571,7 +572,7 @@
     const hasFacts = factsOf(task).region || factsOf(task).industry;
     const guide = hasFacts ? '' : `<div class="interpret-guide"><p>告诉我企业名称和情况，可以判断匹配度。</p>${task.id ? `<button type="button" class="text-button" data-action="portrait-edit" data-task="${esc(task.id)}">补充企业信息</button>` : '<button type="button" class="text-button" data-action="home-start-expert" data-work="profile">补充企业信息</button>'}</div>`;
     const cards = matches.map(({ policy, status }) => `<article class="match-policy is-compact is-clickable is-${status}${policyScore(task, policy) ? ' has-score' : ''}">${scoreBadge(task, policy)}<p class="match-policy-tag">${{ open: '正在申报', notice: '政策方向', closed: '已截止' }[status]}</p><h3><button type="button" class="match-policy-open" data-action="match-drawer" data-task="${esc(task.id)}" data-policy="${esc(policy.id)}">${esc(policy.title)}</button></h3><p class="match-policy-meta">${esc(policy.region)} · ${esc(windowText(policy))}</p>${viewButton(task, policy)}</article>`).join('');
-    return assistantBubble('想了解哪项政策？选一项，我来讲清楚。', `<div class="intake-card match-result${onlyOpen ? ' only-open' : ''}"><div class="match-result-bar">${onlyOpenToggle()}</div>${guide}<div class="match-policy-grid">${cards}</div></div>`, 'match');
+    return assistantBubble('想了解哪项政策？选一项，我来讲清楚。', `<div class="intake-card match-result${onlyOpen ? ' only-open' : ''}"><div class="match-result-bar">${onlyOpenToggle()}</div>${guide}<div class="match-policy-grid">${cards}</div></div>`, 'match', true);
   }
 
   /* 数值门槛只用政策原文写明的（public-policy-data.js 里的 metrics），原文没写就不判断。 */
@@ -1013,7 +1014,7 @@
   const guestTask = () => ({ id: '', company: { name: '', region: '', industry: '' }, steps: {}, interpretPolicyId: guest.policyId, requirements: [], sources: [] });
 
   function guestMarkup() {
-    const row = message => message.role === 'user' ? userBubble(message.text) : assistantBubble(message.text, '', 'match');
+    const row = message => message.role === 'user' ? userBubble(message.text) : assistantBubble(message.text, '', 'match', true);
     const form = guest.applying ? assistantBubble('告诉我企业名称，我接着帮你查还差什么。', `<form id="company-start-form" class="intake-card home-start-card" data-work="diagnosis" data-apply-policy="${esc(guest.policyId)}"><div class="intake-name-row"><label for="start-company-name">企业名称</label><input id="start-company-name" name="companyName" type="text" maxlength="300" required autocomplete="organization" placeholder="请输入企业全称"></div><div class="intake-foot is-end"><button type="submit" class="button button-primary">继续 ${icon('arrow')}</button></div></form>`, 'match') : '';
     return `${interpretMarkup(guestTask())}${guest.messages.map(row).join('')}${form}`;
   }
@@ -1106,12 +1107,21 @@
   const wordFixes = [[/我们公司|我司|我们/g, '本企业'], [/(非常|特别|十分)/g, ''], [/很多/g, '多项'], [/搞(?=[一-龥])/g, '开展'], [/弄好/g, '完成'], [/,/g, '，'], [/;/g, '；'], [/(^|[^0-9]):/g, '$1：'], [/[ \t]+/g, ' ']];
 
   const PENDING_MARKS = /[【\[]待(?:补(?:充)?|核对)(?:[：:]([^】\]]*))?[】\]]/g;
+  /* V2.4 预审第 5 项「企业名称一致」：在材料文字里找出公司名，和工商登记名称不一致的记不符合。
+     提取到的名称以工商登记名称结尾（前面粘了“和”“的”这类字）时按登记名称算，不算不一致。 */
+  function mismatchedCompanyNames(text, registered) {
+    return [...new Set(text.match(/[一-龥（）()]{2,30}?(?:股份有限公司|有限责任公司|有限公司)/g) || [])]
+      .filter(name => name !== registered && !name.endsWith(registered));
+  }
   function reviewMaterial(task, source) {
     const policy = publicPolicies().find(item => item.id === task.policyId);
     const item = policy?.application?.checklist.find(entry => `${policy.id}-${entry.id}` === source.id);
     const unreadable = !source.text.trim() || /^【已上传文件：/.test(source.text);
     if (unreadable) return { unreadable: true, original: '', missing: [], advice: [], polished: '', note: item?.note || '' };
     const text = source.text;
+    // 填了企业名称才核对一致性；入口 3 跳过企业名称时预审不显示这一项。
+    const registeredName = (task.company.name || '').trim();
+    const nameMismatch = registeredName ? mismatchedCompanyNames(text, registeredName) : [];
     // 只去掉【待补充：…】标记本身再判断写没写到：标记里列的词不算已写到，同一行标记外的正文照常算。
     const marks = [...text.matchAll(PENDING_MARKS)];
     const written = text.replace(PENDING_MARKS, '');
@@ -1123,7 +1133,14 @@
     if (text.length < 60) advice.push('内容偏短，建议写清具体做法和结果。');
     if (!/\d/.test(text)) advice.push('没有数字，建议补充金额、人数或时间，方便审核核实。');
     if (/【虚构|示例内容/.test(text)) advice.push('这是示例内容，提交前要换成真实资料。');
-    return { unreadable: false, original: text, missing, pending, advice, items: adviceItems(text, missing, pending), hasRequirements: Boolean(item?.expects?.length), note: item?.note || '' };
+    const items = adviceItems(text, missing, pending);
+    // 名称不一致也写进 AI 建议：原文 / 问题 / 改法（改成工商登记名称）。
+    nameMismatch.forEach(name => items.push({
+      original: text.split(/\n+/).find(line => line.includes(name)) || name,
+      problem: `“${name}”和工商登记名称“${registeredName}”不一致。`,
+      suggestion: `把名称改成工商登记名称“${registeredName}”。`,
+    }));
+    return { unreadable: false, original: text, missing, pending, advice, items, registeredName, nameMismatch, hasRequirements: Boolean(item?.expects?.length), note: item?.note || '' };
   }
 
   /* AI 建议：逐条给出原文、问题和改法。目前是规则检查，没有接模型。 */
@@ -1182,10 +1199,13 @@
   function precheckMarkup(task, source, review) {
     const policy = publicPolicies().find(item => item.id === task.policyId);
     const expects = policy?.application?.checklist.find(entry => `${policy.id}-${entry.id}` === source.id)?.expects || [];
+    const mismatch = review.nameMismatch || [];
     const rows = [
       ['完整性', review.pending.length ? 'pending' : 'pass', review.pending.length ? `还有待补充的内容：${review.pending.join('、')}` : '文件已上传，没有待补充标记'],
       ...expects.map(word => ['条件符合性', review.missing.includes(word) ? 'fail' : 'pass', review.missing.includes(word) ? `政策要求写明“${word}”，材料里还没有` : `已写到“${word}”`]),
       ['可核实性', /\d/.test(review.original) ? 'pass' : 'pending', /\d/.test(review.original) ? '有具体数字，便于核实' : '全文没有金额、人数或时间，审核不好核实'],
+      // V2.4 第 5 项：企业名称一致。任务里没有企业名称（入口 3 跳过）时不显示这一行。
+      ...(review.registeredName ? [['企业名称一致', mismatch.length ? 'fail' : 'pass', mismatch.length ? `材料里出现${mismatch.map(name => `“${name}”`).join('')}，和工商登记名称“${review.registeredName}”不一致` : '材料里的企业名称和工商登记一致']] : []),
     ];
     const labels = { pass: '通过', pending: '待补充', fail: '不符合' };
     // 严重不符 = 这项政策匹配度为低（PRD V2.2 8.1.4 / 8.1.7）。
@@ -1482,7 +1502,7 @@
     const text = !items.length ? `按「${cond}」还是没有合适的政策，可以问问人工客服。` : `以下政策根据「${cond}」查到${open ? `，${open} 项正在申报` : '，暂无正在申报的，可以先了解'}。`;
     const focusAttrs = ' id="match-result-heading" tabindex="-1"';
     const list = items.length ? `<div class="match-result-bar"><p class="nohit-note"${focusAttrs}>这些政策的${applied.region ? '地区' : ''}${applied.region && applied.industry ? '和' : ''}${applied.industry ? '行业' : ''}和企业情况不完全一致，申报前请核对要求。</p>${role === 'match' ? onlyOpenToggle() : ''}</div><div class="match-policy-grid">${items.map(item => compactCard(task, item, false, `按${cond}查到，申报前请核对${[applied.region && '地区', applied.industry && '行业'].filter(Boolean).join('和')}要求`)).join('')}</div>` : '';
-    return userBubble(cond) + assistantBubble(text, `<div class="intake-card match-result match-nohit${onlyOpen ? ' only-open' : ''}">${list}<div class="nohit-service">${noHitService(task, items.length ? '' : focusAttrs)}</div></div>`, role);
+    return userBubble(cond) + assistantBubble(text, `<div class="intake-card match-result match-nohit${onlyOpen ? ' only-open' : ''}">${list}<div class="nohit-service">${noHitService(task, items.length ? '' : focusAttrs)}</div></div>`, role, true);
   }
 
   /* 区间跨过门槛的追问：同一门槛只问一次，答过（含“不确定”）就不再弹。 */
@@ -1510,7 +1530,7 @@
   }
   function resultMarkup(task) {
     // 查不到企业时，无命中卡片上面同样先提示核对企业名称（PRD 6.3 第 1、2 条）。
-    if (noHit(factsOf(task))) return assistantBubble(noHitTitle(task), noHitCard(task, 'match'), 'match') + noHitRelaxed(task, 'match');
+    if (noHit(factsOf(task))) return assistantBubble(noHitTitle(task), noHitCard(task, 'match'), 'match', true) + noHitRelaxed(task, 'match');
     const matches = visible(matchPolicies(factsOf(task)));
     const openCount = matches.filter(item => item.status === 'open').length;
     // 排序（PRD 8.1.4）：状态 → 档位（高、中、暂无法判断、低）→ 内部分值。
@@ -1526,7 +1546,7 @@
     const noticeMarkup = inlineCompany ? companyInlineEdit(task, 'result') : (notFoundNotice(task) + regionHint) || partial;
     const card = `<div class="intake-card match-result${onlyOpen ? ' only-open' : ''}">${noticeMarkup}<div class="match-result-bar"><p id="match-result-heading" class="match-result-heading" tabindex="-1">有 ${openCount} 项政策正在申报</p>${onlyOpenToggle()}</div>${typeFilter(matches)}<div class="match-policy-grid">${cards}</div>${diagnosisCard(task)}${feedbackMarkup('match_result')}</div>`;
     // 少于 3 条时的追问并进结果卡片底部，一次只回一张卡片。
-    return assistantBubble(`「${task.company.name}」比对完了。`, card + followupBubble(task, openCount, matches.map(item => item.policy), true), 'match');
+    return assistantBubble(`「${task.company.name}」比对完了。`, card + followupBubble(task, openCount, matches.map(item => item.policy), true), 'match', true);
   }
 
   /* 少于 3 条正在申报时追问一轮（PRD V2.2 8.1.3）：只问还空着的关键字段（地区、行业、企业规模、成立年限、企业类型），
@@ -1571,9 +1591,9 @@
 
   /* 从申报辅助进来还没选政策：列出正在申报的政策，选好后才知道要备哪些材料。 */
   function assemblyPicker(task) {
-    if (noHit(factsOf(task))) return assistantBubble(noHitTitle(task), noHitCard(task, 'assembly'), 'assembly') + noHitRelaxed(task, 'assembly');
+    if (noHit(factsOf(task))) return assistantBubble(noHitTitle(task), noHitCard(task, 'assembly'), 'assembly', true) + noHitRelaxed(task, 'assembly');
     const cards = openFits(factsOf(task)).map((item, index) => compactCard(task, item, index === 0)).join('');
-    return assistantBubble(`请选择「${task.company.name}」要申报的政策，选好后我按它列出要准备的材料。`, `<div class="intake-card match-result"><div class="match-policy-grid">${cards}</div></div>`, 'assembly');
+    return assistantBubble(`请选择「${task.company.name}」要申报的政策，选好后我按它列出要准备的材料。`, `<div class="intake-card match-result"><div class="match-policy-grid">${cards}</div></div>`, 'assembly', true);
   }
 
   /* 全部政策放在右侧抽屉，对话里只留前三项。 */
@@ -2032,7 +2052,7 @@
     }
     const rows = results.map(({ policy, status }, index) => `<button type="button" class="policy-pick${pick.policyId === policy.id ? ' is-picked' : ''}" data-action="policy-pick" data-policy="${esc(policy.id)}"${pick.policyId ? ' disabled' : ''}><span class="policy-pick-no">${index + 1}</span><span class="policy-pick-text"><strong>${esc(policy.title)}</strong><small>${esc(policy.region)} · ${esc(windowText(policy))} · <em class="is-${status}">${POLICY_STATUS[status]}</em></small></span></button>`).join('');
     const none = pick.policyId ? '' : `<a class="policy-pick policy-pick-none" href="#dashboard?work=interpret" data-action="nav-work" data-work="interpret"><span class="policy-pick-text"><strong>都不是，帮我按企业找</strong><small>告诉我企业名称，我帮您找能申报的政策</small></span></a>`;
-    return assistantBubble(`找到 ${results.length} 项相关政策，选一项：`, `<div class="intake-card policy-pick-list">${rows}${none}</div>`, work);
+    return assistantBubble(`找到 ${results.length} 项相关政策，选一项：`, `<div class="intake-card policy-pick-list">${rows}${none}</div>`, work, true);
   }
   function companyAsk(work, policy, readonly = false) {
     const status = statusOf(policy);
@@ -2114,14 +2134,14 @@
     if (!policy) return '';
     const rows = policyCheckRows(task, policy).map(([label, need, value]) => `<div class="policy-check-row"><span class="policy-check-label">${esc(label)}</span><span class="policy-check-need">${esc(need)}</span><span class="policy-check-have">${value}</span></div>`).join('');
     const head = `<div class="policy-check-row is-head"><span>条件</span><span>政策要求</span><span>企业现状</span></div>`;
-    return assistantBubble(task.company.name ? '查到了。这项政策要看下面几项，请核对：' : '这项政策要看下面几项，请补充：', `<div class="intake-card policy-check-card" data-task="${esc(task.id)}">${head}${rows}<div class="intake-foot is-end"><button type="button" class="button button-primary" data-action="policy-check-confirm" data-task="${esc(task.id)}">确认，开始准备材料 ${icon('arrow')}</button></div></div>`, 'assembly');
+    return assistantBubble(task.company.name ? '查到了。这项政策要看下面几项，请核对：' : '这项政策要看下面几项，请补充：', `<div class="intake-card policy-check-card" data-task="${esc(task.id)}">${head}${rows}<div class="intake-foot is-end"><button type="button" class="button button-primary" data-action="policy-check-confirm" data-task="${esc(task.id)}">确认，开始准备材料 ${icon('arrow')}</button></div></div>`, 'assembly', true);
   }
   /* 入口 2 确认后：只给这条政策的匹配度；地区、行业对不上时提示，不拦截。 */
   /* 旧任务：已保存的匹配结果不重算；选定的政策已截止时出提示，材料和版本照常可看、可下载（PRD V2.2 8.1.1）。 */
   function expiredNotice(task) {
     const policy = task?.steps?.match ? publicPolicies().find(item => item.id === task.policyId) : null;
     if (!policy || statusOf(policy) !== 'closed') return '';
-    return assistantBubble('这项政策已截止，本期无法申报。', `<div class="intake-card policy-expired"><p>已准备的材料和版本照常可以查看、下载。</p><a class="text-button" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看政策原文 ${icon('arrow')}</a></div>`, 'guidance');
+    return assistantBubble('这项政策已截止，本期无法申报。', `<div class="intake-card policy-expired"><p>已准备的材料和版本照常可以查看、下载。</p><a class="text-button" href="${esc(policy.sourceUrl)}" target="_blank" rel="noopener noreferrer">查看政策原文 ${icon('arrow')}</a></div>`, 'guidance', true);
   }
   function policyCheckParts(task) {
     if (task.entry !== 'assembly' || task.intake?.stage === 'policy-check') return '';
@@ -2139,7 +2159,7 @@
   }
   function policyCheckNote(task) {
     const parts = policyCheckParts(task);
-    return parts ? assistantBubble(parts.text, parts.card, 'assembly') : '';
+    return parts ? assistantBubble(parts.text, parts.card, 'assembly', true) : '';
   }
 
   /* 入口 3：按清单核对已备好的材料（完整度 + AI 诊断），再看办事指南。 */
@@ -2173,7 +2193,7 @@
     if (!policy) return '';
     const done = work === 'assembly' && task.intake?.stage !== 'policy-check';
     // 入口 2 确认后，核对条件那张卡片留在对话里（只读），后面接用户的“确认”。
-    const checked = done ? assistantBubble(task.company.name ? '查到了。这项政策要看下面几项，请核对：' : '这项政策要看下面几项，请补充：', `<div class="intake-card policy-check-card is-done"><div class="policy-check-row is-head"><span>条件</span><span>政策要求</span><span>企业现状</span></div>${policyCheckRows(task, policy).map(([label, need, value]) => `<div class="policy-check-row"><span class="policy-check-label">${esc(label)}</span><span class="policy-check-need">${esc(need)}</span><span class="policy-check-have">${value}</span></div>`).join('')}</div>`, 'assembly') + userBubble('确认，开始准备材料') : '';
+    const checked = done ? assistantBubble(task.company.name ? '查到了。这项政策要看下面几项，请核对：' : '这项政策要看下面几项，请补充：', `<div class="intake-card policy-check-card is-done"><div class="policy-check-row is-head"><span>条件</span><span>政策要求</span><span>企业现状</span></div>${policyCheckRows(task, policy).map(([label, need, value]) => `<div class="policy-check-row"><span class="policy-check-label">${esc(label)}</span><span class="policy-check-need">${esc(need)}</span><span class="policy-check-have">${value}</span></div>`).join('')}</div>`, 'assembly', true) + userBubble('确认，开始准备材料') : '';
     return assistantBubble(PICK_GREETING[work], '', work) + userBubble(policy.title) + companyAsk(work, policy, true) + userBubble(task.company.name || '先跳过企业名称') + checked;
   }
   /* 入口 2 确认后：匹配度写在材料卡片开头，和材料清单是同一张卡片。 */
@@ -2218,7 +2238,7 @@
     const waiting = unmatchedFiles.get(task.id) || [];
     const assign = waiting.length ? `<div class="check-assign"><p>这 ${waiting.length} 个文件没对上清单，选一下分别是哪一项：</p>${waiting.map((file, index) => `<label class="check-assign-row"><span>${esc(file.name)}</span><select data-assign-file="${index}"><option value="">选一项</option>${rows.map(({ item }) => `<option value="${esc(`${policy.id}-${item.id}`)}">${esc(item.label)}</option>`).join('')}<option value="__none">不属于清单，不用核对</option></select></label>`).join('')}<div class="intake-foot is-end"><button type="button" class="button button-primary" data-action="check-assign" data-task="${id}">确定</button></div></div>` : '';
     const guideBtn = guideSteps(task.id).includes('guide') ? '' : `<div class="intake-foot is-end"><button type="button" class="button button-primary" data-action="guidance-open" data-task="${id}">看办事指南</button></div>`;
-    return assistantBubble(text, `<div class="intake-card check-card">${scoreLine(task,policy,{from:'recheck'})}${reuse}${severe}${assign}${list}<p class="precheck-note">AI 诊断按政策要求逐项检查，结论不构成官方审核意见</p>${guideBtn}</div>`, 'guidance');
+    return assistantBubble(text, `<div class="intake-card check-card">${scoreLine(task,policy,{from:'recheck'})}${reuse}${severe}${assign}${list}<p class="precheck-note">AI 诊断按政策要求逐项检查，结论不构成官方审核意见</p>${guideBtn}</div>`, 'guidance', true);
   }
   // 一次传多个：按文件名对应清单项；对不上的提示单独上传。
   function bulkCheckUpload(input) {
