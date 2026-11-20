@@ -1222,6 +1222,11 @@
       const mediaAdvice=`已收到。照片、视频的内容需要人工核对${checklistItem.note ? `；要求：${checklistItem.note}` : ''}。`;
       return `<section class="review-file"><div class="review-file-row"><div class="review-file-main"><span class="review-file-label">原文</span><span class="review-file-link">${icon('file')}<span>${esc(fileName)}</span></span></div><div class="review-file-actions"><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept=".jpg,.jpeg,.png,.mp4,.mov" aria-label="重新上传${esc(source.name)}"></label></div></div></section><section class="review-ai" aria-label="AI 建议"><header class="review-ai-head"><span class="review-ai-mark" aria-hidden="true">${icon('spark')}</span><h3>AI 建议</h3></header><div class="review-ai-scroll" tabindex="0"><p>${esc(mediaAdvice)}</p></div>${feedbackMarkup('material', task.policyId)}</section>`;
     }
+    // 内容安全（模拟开关）：被拦截的资料只显示文件名和“未通过审核”，不给 AI 建议、与政策差异。
+    if (!source.provided && isSourceBlocked(task.id, source.id)) {
+      const fileName=source.fileName||source.name;
+      return `<section class="review-file"><div class="review-file-row"><div class="review-file-main"><span class="review-file-label">原文</span><span class="review-file-link is-blocked"><span class="review-file-blocked-icon" aria-hidden="true">${icon('ban')}</span><span class="review-file-name" title="${esc(fileName)}">${esc(fileName)}</span><span class="blocked-tag">未通过审核</span></span></div><div class="review-file-actions"><label class="chat-gap-upload">重新上传<input type="file" data-source-upload ${attrs} accept=".doc,.docx,.txt,.md,.htm,.html,.pdf,.jpg,.jpeg,.png" aria-label="重新上传${esc(source.name)}"></label><button type="button" class="text-button review-file-delete" data-action="material-delete" ${attrs}>删除</button></div></div><p class="review-blocked-note">内容未通过安全审核，未做解析，也不会用于申报材料。</p></section>`;
+    }
     if (!source.provided) {
       const policy = publicPolicies().find(item => item.id === task.policyId);
       const spec = policy?.application?.checklist.find(entry => `${policy.id}-${entry.id}` === source.id);
@@ -1253,7 +1258,7 @@
   function refreshMaterialReview(task, sourceId) {
     const drawer = document.querySelector('#match-drawer');
     const source = task?.sources.find(item => item.id === sourceId);
-    if (!drawer || drawer.dataset.reviewSource !== sourceId || !source?.provided) return;
+    if (!drawer || drawer.dataset.reviewSource !== sourceId || (!source?.provided && !isSourceBlocked(task?.id, sourceId))) return;
     drawer.querySelector('.match-drawer-body').innerHTML = materialReviewBody(task, source);
   }
 
@@ -1265,6 +1270,15 @@
   /* ---------- 上传图片时打码展示：缩到很小再放大，页面上不留清晰原图；只存在当前页面 ---------- */
   const mosaics = new Map();
   const mosaicWidth = 24;
+
+  /* ---------- 内容安全（模拟开关 fileBlocked）：被拦截的资料名单，只存在当前页面 ----------
+     store 的 normalizeTask 会剥掉 source 上的额外字段，blocked 标记记在这里；
+     文件名等仍存在 source 上，刷新页面后退回“还没有文件”。 */
+  const blockedSources = new Map(); // `${taskId}:${sourceId}`
+  const isSourceBlocked = (taskId, sourceId) => blockedSources.has(`${taskId || ''}:${sourceId || ''}`);
+  const markSourceBlocked = (taskId, sourceId) => { blockedSources.set(`${taskId || ''}:${sourceId || ''}`, true); };
+  const clearSourceBlocked = (taskId, sourceId) => { blockedSources.delete(`${taskId || ''}:${sourceId || ''}`); };
+  const forgetBlockedSources = taskId => { for (const key of blockedSources.keys()) if (key.startsWith(`${taskId || ''}:`)) blockedSources.delete(key); };
 
   function rememberUpload(file, taskId = '', work = '', sourceId = '') {
     if (!/^image\//.test(file?.type || '') || typeof URL.createObjectURL !== 'function') return;
@@ -2168,6 +2182,8 @@
     return items.map(item => {
       const source = task.sources.find(entry => entry.id === `${policy.id}-${item.id}`);
       const required = item.required !== false;
+      // 内容安全（模拟开关）：被拦截的资料按“有问题”计，不算缺，也不算齐。
+      if (source && !source.provided && isSourceBlocked(task.id, source.id)) return { item, source, required, state: 'warn', notes: ['未通过内容安全审核，请重新上传'] };
       if (!source?.provided) return { item, source, required, state: 'lack', notes: [] };
       const review = reviewMaterial(task, source);
       if (item.media) return { item, source, required, state: 'ok', notes: [] };
@@ -2319,5 +2335,5 @@
   }
   try { syncApplications(); } catch (error) { console.error('材料清单同步失败', error); }
 
-  window.PolicyMatch = Object.freeze({ statusOf, daysLeft, windowText, confOf, pickTranscript, policyCheckLead, guideSteps, userBubble, expiredNotice, pickComposer, prepOpen, policyFirstMarkup, policyCheckMarkup, policyCheckNote, guidanceCheckMarkup, resetPick, stepInfo, apiProfile, portraitRows, PORTRAIT_LABELS, companyNotFound, resetGuest, noTemplateNotice, quickIntakeMarkup, assemblyPicker, refreshMaterialReview, forgetUpload, closeDrawer, handleClick, intakeActive, intakeMarkup, matchChatMarkup, matchPending, openCount, composerAttach, questions, understanding, beginPortrait, portraitLoading, portraitEditing, portraitEditor, scoreText, scoreLine, openMaterialReview, reviewMaterial, materialAdvice, maskedHtml, companyRows, policyMetrics, openHomeIntake, homeIntakeMarkup, rememberUpload, adoptUploads, uploadsMarkup, interpretMarkup, interpretPicking, guestMarkup, guestAsk, finishGuest, applicationIntro, applicationNote, guidanceMarkup, guidanceDetail, policyDetail, versionReview });
+  window.PolicyMatch = Object.freeze({ statusOf, daysLeft, windowText, confOf, pickTranscript, policyCheckLead, guideSteps, userBubble, expiredNotice, pickComposer, prepOpen, policyFirstMarkup, policyCheckMarkup, policyCheckNote, guidanceCheckMarkup, resetPick, stepInfo, apiProfile, portraitRows, PORTRAIT_LABELS, companyNotFound, resetGuest, noTemplateNotice, quickIntakeMarkup, assemblyPicker, refreshMaterialReview, forgetUpload, closeDrawer, handleClick, intakeActive, intakeMarkup, matchChatMarkup, matchPending, openCount, composerAttach, questions, understanding, beginPortrait, portraitLoading, portraitEditing, portraitEditor, scoreText, scoreLine, openMaterialReview, reviewMaterial, materialAdvice, maskedHtml, companyRows, policyMetrics, openHomeIntake, homeIntakeMarkup, rememberUpload, adoptUploads, uploadsMarkup, isSourceBlocked, markSourceBlocked, clearSourceBlocked, forgetBlockedSources, interpretMarkup, interpretPicking, guestMarkup, guestAsk, finishGuest, applicationIntro, applicationNote, guidanceMarkup, guidanceDetail, policyDetail, versionReview });
 })();

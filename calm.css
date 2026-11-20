@@ -190,3 +190,24 @@ body::before { content:""; display:block; position:fixed; inset:0; z-index:-1; p
   .start-hero { padding-top:40px; }
   .start-hero h1 .start-hero-spark { display:block; width:36px; height:36px; margin:0 auto 8px; }
 }
+
+/* v2.4e 内容安全：被拦截的对话气泡和资料行。 */
+/* 对话：被拦截的用户气泡与“编辑重发”。 */
+.chat-message.chat-user.is-blocked { background:#f3f4f6; color:#8a93a3; }
+.chat-blocked-note { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:2px 4px; margin:6px 0 0; max-width:100%; font-size:12px; line-height:1.7; color:#d93636; text-align:right; }
+.chat-blocked-note .chat-blocked-mark { display:inline-flex; flex:none; }
+.chat-blocked-note .chat-blocked-mark .icon { width:14px; height:14px; }
+.chat-blocked-note .chat-blocked-edit { flex:none; min-height:0; padding:0; font-size:12px; line-height:1.7; color:#1557e6; white-space:nowrap; }
+.chat-blocked-note .chat-blocked-edit:hover { text-decoration:underline; text-underline-offset:3px; }
+
+/* 材料：被拦截的资料行（材料卡和查看抽屉共用红色标签）。 */
+.blocked-tag { display:inline-flex; align-items:center; flex:none; font-size:12px; line-height:18px; padding:2px 8px; color:#d93636; background:#fdecec; border-radius:999px; white-space:nowrap; }
+.prep-file.is-blocked .prep-file-blocked-icon, .review-file-link.is-blocked .review-file-blocked-icon { display:inline-flex; align-items:center; justify-content:center; flex:none; width:32px; height:32px; border-radius:8px; background:#eef0f4; }
+.prep-file.is-blocked .prep-file-blocked-icon .icon, .review-file-link.is-blocked .review-file-blocked-icon .icon { width:16px; height:16px; color:#a0a8b6; }
+.prep-file.is-blocked .prep-file-text { flex:1 1 160px; }
+.prep-blocked-name { display:flex; align-items:center; gap:8px; min-width:0; }
+.prep-blocked-name strong { flex:0 1 auto; }
+.prep-blocked-note, .review-blocked-note { margin:6px 0 0; font-size:12px; line-height:1.7; color:#6b7585; }
+.review-file-link.is-blocked { color:#3c4657; cursor:default; }
+.review-file-link.is-blocked .review-file-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; }
+.review-file-link.is-blocked:hover { color:#3c4657; }

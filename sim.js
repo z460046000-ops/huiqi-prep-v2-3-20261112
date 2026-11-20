@@ -6,6 +6,8 @@
   const LABELS = {
     apiTimeout: '企业接口超时',
     uploadFail: '文件上传失败',
+    textBlocked: '对话内容未过审核',
+    fileBlocked: '上传内容未过审核',
     interpretFail: '白话解读生成失败',
     loggedOut: '未登录',
     risk: '企业有经营风险',
